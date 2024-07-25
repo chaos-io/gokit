@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chaos-io/chaos/logs"
 	"github.com/go-kit/kit/log"
 	kitsd "github.com/go-kit/kit/sd"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
@@ -12,8 +13,6 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-
-	"github.com/chaos-io/chaos/logs"
 )
 
 type Client struct {
@@ -23,7 +22,7 @@ type Client struct {
 }
 
 func NewClient(urls []string, cfg *Config, logger log.Logger) *Client {
-	if cfg == nil || len(urls) == 0 {
+	if cfg == nil || cfg.ClientConfig == nil || len(urls) == 0 {
 		return nil
 	}
 	var sc []constant.ServerConfig
@@ -33,12 +32,12 @@ func NewClient(urls []string, cfg *Config, logger log.Logger) *Client {
 		if err != nil {
 			panic(err)
 		}
-		sc = append(sc, *constant.NewServerConfig(ip, uint64(port)))
+		sc = append(sc, *constant.NewServerConfig(ip, uint64(port), constant.WithContextPath("/nacos")))
 	}
 
 	namingClient, err := clients.NewNamingClient(
 		vo.NacosClientParam{
-			ClientConfig:  &cfg.ClientConfig,
+			ClientConfig:  cfg.ClientConfig,
 			ServerConfigs: sc,
 		},
 	)
@@ -47,7 +46,6 @@ func NewClient(urls []string, cfg *Config, logger log.Logger) *Client {
 	}
 
 	nacosClient := &Client{client: namingClient, logger: logger}
-
 	return nacosClient
 }
 
@@ -57,16 +55,6 @@ func (c *Client) Register(urlStr, name string, tags []string) error {
 	}
 
 	param := vo.RegisterInstanceParam{ServiceName: name}
-
-	// if strings.Contains(urlStr, ":") {
-	//	param.Ip = strings.Split(urlStr, ":")[0]
-	//	p, err := strconv.Atoi(strings.Split(urlStr, ":")[1])
-	//	if err != nil {
-	//		return err
-	//	}
-	//	param.Port = uint64(p)
-	// }
-
 	url, err := url.Parse(urlStr)
 	if err != nil {
 		return err
@@ -80,6 +68,7 @@ func (c *Client) Register(urlStr, name string, tags []string) error {
 	param.Port = uint64(port)
 	param.Healthy = true
 	param.Enable = true
+	param.Ephemeral = true
 	param.Weight = 10
 
 	success, err := c.client.RegisterInstance(param)
