@@ -3,7 +3,7 @@ module github.com/chaos-io/gokit
 go 1.19
 
 require (
-	github.com/chaos-io/chaos v0.0.0-20240401095117-54218f940eb0
+	github.com/chaos-io/chaos v0.0.0-20240710100849-40bc395de520
 	github.com/go-kit/kit v0.13.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mojo-lang/core/go v0.0.0-20240205040023-0a270faf3af3
