@@ -113,6 +113,8 @@ github.com/chaos-io/chaos v0.0.0-20241225065651-3239fd76243a h1:dE6OnpVLOTpTv4BM
 github.com/chaos-io/chaos v0.0.0-20241225065651-3239fd76243a/go.mod h1:MefydiDPfcmt+ZkgSWmIyhHxpXio0uv1v/CxKzqiKjQ=
 github.com/chaos-io/chaos v0.0.0-20241225080920-2fadc6bb7709 h1:THenDOO+NeJ18thh44uuyITCj5UZ27+dZJBzfMwVmho=
 github.com/chaos-io/chaos v0.0.0-20241225080920-2fadc6bb7709/go.mod h1:MefydiDPfcmt+ZkgSWmIyhHxpXio0uv1v/CxKzqiKjQ=
+github.com/chaos-io/chaos v0.0.0-20241225083011-1dba445430a0 h1:3BkVFMB6IF+TLIiucVskDhBNdkO2IgYEE1n9q9Kkzuc=
+github.com/chaos-io/chaos v0.0.0-20241225083011-1dba445430a0/go.mod h1:MefydiDPfcmt+ZkgSWmIyhHxpXio0uv1v/CxKzqiKjQ=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/logex v1.2.0/go.mod h1:9+9sk7u7pGNWYMkh0hdiL++6OeibzJccyQU4p4MedaY=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
