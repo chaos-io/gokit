@@ -1,9 +1,9 @@
 module github.com/chaos-io/gokit
 
-go 1.19
+go 1.22.10
 
 require (
-	github.com/chaos-io/chaos v0.0.0-20240710100849-40bc395de520
+	github.com/chaos-io/chaos v0.0.0-20241225065651-3239fd76243a
 	github.com/go-kit/kit v0.13.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mojo-lang/core/go v0.0.0-20240205040023-0a270faf3af3
@@ -115,7 +115,7 @@ require (
 	google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
-	google.golang.org/protobuf v1.33.0 // indirect
+	google.golang.org/protobuf v1.36.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

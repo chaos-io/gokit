@@ -107,6 +107,10 @@ github.com/cespare/xxhash/v2 v2.2.0 h1:DC2CZ1Ep5Y4k3ZQ899DldepgrayRUGE6BBZ/cd9Cj
 github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/chaos-io/chaos v0.0.0-20240710100849-40bc395de520 h1:ECGvMPIEKwRBVZkdLjpJcwz1B9S2Otwhc++dBC+/Kk8=
 github.com/chaos-io/chaos v0.0.0-20240710100849-40bc395de520/go.mod h1:c0LccO2I/l1UtIWq5HkwllY71BCn8/6uA0AwwPTzkN0=
+github.com/chaos-io/chaos v0.0.0-20241224143956-fd9cedb6261b h1:ukQvyvgPM6u2Zwfc3KRUDYPWgZ8HQqRdXQQLwGS2Cc0=
+github.com/chaos-io/chaos v0.0.0-20241224143956-fd9cedb6261b/go.mod h1:MefydiDPfcmt+ZkgSWmIyhHxpXio0uv1v/CxKzqiKjQ=
+github.com/chaos-io/chaos v0.0.0-20241225065651-3239fd76243a h1:dE6OnpVLOTpTv4BMM8a9f4OpJH1jn7yv6HDcFgeb6w0=
+github.com/chaos-io/chaos v0.0.0-20241225065651-3239fd76243a/go.mod h1:MefydiDPfcmt+ZkgSWmIyhHxpXio0uv1v/CxKzqiKjQ=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/logex v1.2.0/go.mod h1:9+9sk7u7pGNWYMkh0hdiL++6OeibzJccyQU4p4MedaY=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
@@ -923,6 +927,7 @@ google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp0
 google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.33.0 h1:uNO2rsAINq/JlFpSdYEKIZ0uKD/R9cpdv0T+yoGwGmI=
 google.golang.org/protobuf v1.33.0/go.mod h1:c6P6GXX6sHbq/GpV6MGZEdwhWPcYBgnhAHhKbcUYpos=
+google.golang.org/protobuf v1.36.1/go.mod h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

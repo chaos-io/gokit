@@ -9,14 +9,14 @@ import (
 )
 
 type kitLogger struct {
-	*logs.ZapLogger
+	*logs.SugaredLogger
 }
 
 func Logger() log.Logger {
 	return NewKitLogger(logs.Logger())
 }
 
-func NewKitLogger(zap *logs.ZapLogger) log.Logger {
+func NewKitLogger(zap *logs.SugaredLogger) log.Logger {
 	return &kitLogger{zap}
 }
 
