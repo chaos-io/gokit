@@ -3,7 +3,7 @@ module github.com/chaos-io/gokit
 go 1.22.10
 
 require (
-	github.com/chaos-io/chaos v0.0.0-20241225065651-3239fd76243a
+	github.com/chaos-io/chaos v0.0.0-20241225080920-2fadc6bb7709
 	github.com/go-kit/kit v0.13.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mojo-lang/core/go v0.0.0-20240205040023-0a270faf3af3
