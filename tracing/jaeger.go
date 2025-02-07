@@ -1,40 +1,33 @@
 package tracing
 
 import (
-	"io"
+	"context"
 	"time"
 
-	"github.com/chaos-io/chaos/logs"
-	"github.com/opentracing/opentracing-go"
-	"github.com/uber/jaeger-client-go"
-	jaegercfg "github.com/uber/jaeger-client-go/config"
-	"github.com/uber/jaeger-client-go/rpcmetrics"
-	"github.com/uber/jaeger-lib/metrics"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
+	traceSDK "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
-// Init creates a new instance of Jaeger tracer.
-func newTracer(serviceName string, metricsFactory metrics.Factory, param float64, backendHostPort string) (opentracing.Tracer, io.Closer, error) {
-	var err error
-	cfg := jaegercfg.Configuration{
-		ServiceName: serviceName,
-		Sampler: &jaegercfg.SamplerConfig{
-			Type:  jaeger.SamplerTypeRateLimiting,
-			Param: param,
-		},
+func NewJaegerTraceProvider(ctx context.Context, serviceName, jaegerEndpoint string) (*traceSDK.TracerProvider, error) {
+	exp, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(jaegerEndpoint),
+		otlptracehttp.WithInsecure())
+	if err != nil {
+		return nil, err
 	}
 
-	var sender jaeger.Transport
-	if sender, err = jaeger.NewUDPTransport(backendHostPort, 0); err != nil {
-		logs.Error("cannot initialize UDP sender", err)
-		return nil, nil, err
+	res, err := resource.New(ctx, resource.WithAttributes(semconv.ServiceName(serviceName)))
+	if err != nil {
+		return nil, err
 	}
 
-	return cfg.NewTracer(
-		jaegercfg.Reporter(jaeger.NewRemoteReporter(
-			sender,
-			jaeger.ReporterOptions.BufferFlushInterval(1*time.Second),
-		)),
-		jaegercfg.Metrics(metricsFactory),
-		jaegercfg.Observer(rpcmetrics.NewObserver(metricsFactory, rpcmetrics.DefaultNameNormalizer)),
+	traceProvider := traceSDK.NewTracerProvider(
+		traceSDK.WithResource(res),
+		traceSDK.WithSampler(traceSDK.AlwaysSample()),
+		traceSDK.WithBatcher(exp, traceSDK.WithBatchTimeout(time.Second)),
 	)
+
+	return traceProvider, nil
 }

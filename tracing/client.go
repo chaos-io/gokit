@@ -1,39 +1,34 @@
 package tracing
 
 import (
-	"io"
+	"context"
 
-	"github.com/opentracing/opentracing-go"
-	"github.com/uber/jaeger-lib/metrics"
+	"go.opentelemetry.io/otel"
 
 	"github.com/chaos-io/chaos/logs"
 )
 
-func New(name string) (opentracing.Tracer, io.Closer) {
+func New(name string) (func(context.Context) error, error) {
 	return NewWith(name, NewConfig("tracing"))
 }
 
-func NewWith(name string, cfg *Config) (opentracing.Tracer, io.Closer) {
+func NewWith(name string, cfg *Config) (func(context.Context) error, error) {
 	if cfg == nil {
 		logs.Fatal("failed to create the tracer coz of given nil config")
 		return nil, nil
 	}
 
 	if cfg.Enable {
-		tracer, c, err := newTracer(name, metrics.NullFactory, cfg.Param, cfg.Url)
+		ctx := context.Background()
+		tracerProvider, err := NewJaegerTraceProvider(ctx, name, cfg.Url)
 		if err != nil {
-			logs.Fatalw("failed to create the tracing")
-			return nil, nil
+			logs.Errorw("failed to create the tracing", "name", name, "host", cfg.Url, "error", err)
+			return nil, err
 		}
 
-		if tracer == nil {
-			logs.Fatal()
-		}
-
-		opentracing.SetGlobalTracer(tracer)
-		return tracer, c
+		otel.SetTracerProvider(tracerProvider)
+		return tracerProvider.Shutdown, nil
 	}
 
-	return opentracing.NoopTracer{}, nil
-	// return nil, nil
+	return nil, nil
 }
