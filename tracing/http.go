@@ -3,9 +3,11 @@ package tracing
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/chaos-io/chaos/logs"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -18,53 +20,32 @@ import (
 func HTTPToContext(tracer trace.Tracer, operationName string) func(ctx context.Context, req *http.Request) context.Context {
 	return func(ctx context.Context, req *http.Request) context.Context {
 		// Try to join to a trace propagated in `req`.
-		// Extract the context from HTTP headers.
-		propagator := otel.GetTextMapPropagator()
+		propagator := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
+		ctx = propagator.Extract(ctx, propagation.HeaderCarrier(req.Header))
 
-		// Extract the context from incoming HTTP headers (if exists)
-		ctx = propagator.Extract(ctx, RequestCarrier(req.Header))
-
-		// Create a new Span from the extracted context, or root span if none exists
-		ctx, span := tracer.Start(ctx, operationName, trace.WithAttributes(
-			semconv.HTTPMethod(req.Method),
-			semconv.HTTPURL(req.URL.String()),
-		))
-
-		// Ensure the span is finished when the context is done
+		ctx, span := tracer.Start(ctx, operationName, trace.WithSpanKind(trace.SpanKindServer))
 		defer span.End()
 
-		// Inject the trace context into the outgoing request headers (for downstream services)
-		propagator.Inject(ctx, RequestCarrier(req.Header))
+		// Set attributes on the span
+		span.SetAttributes(
+			semconv.HTTPMethod(req.Method),
+		)
 
-		// Optional: Log any errors encountered during the trace context extraction
-		// If the SpanContext is empty, it means no valid trace context was found in the request
-		spanContext := trace.SpanFromContext(ctx).SpanContext()
-		if !spanContext.IsValid() {
-			logs.Warnw("tracing span context invalid", "traceID", spanContext.TraceID())
+		if req.URL != nil {
+			span.SetAttributes(semconv.HTTPURL(req.URL.String()))
+			span.SetAttributes(semconv.HTTPScheme(req.URL.Scheme))
+
+			// Optional: Break down the URL into more attributes (path, query)
+			if parsedURL, err := url.Parse(req.URL.String()); err == nil {
+				span.SetAttributes(attribute.String("http.path", parsedURL.Path))
+				span.SetAttributes(attribute.String("http.query", parsedURL.RawQuery))
+			} else {
+				logs.Warnw("failed to parse url", "url", req.URL.String(), "error", err)
+			}
+		} else {
+			logs.Warn("request URL is nil")
 		}
 
 		return ctx
 	}
-}
-
-// RequestCarrier wraps http.Header to implement the TextMapCarrier interface required by OpenTelemetry.
-type RequestCarrier http.Header
-
-// Get retrieves a key from the http.Header.
-func (c RequestCarrier) Get(key string) string {
-	return http.Header(c).Get(key)
-}
-
-// Set sets a key-value pair in the http.Header.
-func (c RequestCarrier) Set(key, value string) {
-	http.Header(c).Set(key, value)
-}
-
-// Keys retrieves all keys in the http.Header.
-func (c RequestCarrier) Keys() []string {
-	keys := make([]string, 0, len(http.Header(c)))
-	for key := range http.Header(c) {
-		keys = append(keys, key)
-	}
-	return keys
 }
