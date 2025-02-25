@@ -8,9 +8,13 @@ import (
 	"github.com/chaos-io/chaos/logs"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// var (
+// 	traceparent = http.CanonicalHeaderKey("traceparent")
+// 	tracestate  = http.CanonicalHeaderKey("tracestate")
+// )
 
 // HTTPToContext returns an http RequestFunc that tries to join with an
 // OpenTelemetry trace found in `req` and starts a new Span called
@@ -19,21 +23,17 @@ import (
 // can be retrieved with otel.GetSpan(ctx).
 func HTTPToContext(tracer trace.Tracer, operationName string) func(ctx context.Context, req *http.Request) context.Context {
 	return func(ctx context.Context, req *http.Request) context.Context {
-		// Try to join to a trace propagated in `req`.
-		propagator := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
-		ctx = propagator.Extract(ctx, propagation.HeaderCarrier(req.Header))
+		prop := propagation.TraceContext{}
+		ctx = prop.Extract(ctx, propagation.HeaderCarrier(req.Header))
 
 		ctx, span := tracer.Start(ctx, operationName, trace.WithSpanKind(trace.SpanKindServer))
 		defer span.End()
 
 		// Set attributes on the span
-		span.SetAttributes(
-			semconv.HTTPMethod(req.Method),
-		)
-
+		span.SetAttributes(attribute.String("http.method", req.Method))
 		if req.URL != nil {
-			span.SetAttributes(semconv.HTTPURL(req.URL.String()))
-			span.SetAttributes(semconv.HTTPScheme(req.URL.Scheme))
+			span.SetAttributes(attribute.String("http.url", req.URL.String()))
+			span.SetAttributes(attribute.String("http.scheme", req.URL.String()))
 
 			// Optional: Break down the URL into more attributes (path, query)
 			if parsedURL, err := url.Parse(req.URL.String()); err == nil {
@@ -48,4 +48,9 @@ func HTTPToContext(tracer trace.Tracer, operationName string) func(ctx context.C
 
 		return ctx
 	}
+}
+
+func InjectHTTPHeader(ctx context.Context, header http.Header) {
+	prop := propagation.TraceContext{}
+	prop.Inject(ctx, propagation.HeaderCarrier(header))
 }
