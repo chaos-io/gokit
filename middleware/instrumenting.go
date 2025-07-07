@@ -2,13 +2,14 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/metrics"
-	"github.com/mojo-lang/core/go/pkg/mojo/core"
 
+	"github.com/chaos-io/chaos/core"
 	"github.com/chaos-io/gokit/counter"
 )
 
@@ -63,7 +64,8 @@ func getCount(request interface{}) float64 {
 func getErrorString(err error) string {
 	var ret string
 	if err != nil {
-		if e, ok := err.(*core.Error); ok {
+		var e *core.Error
+		if errors.As(err, &e) {
 			if e.StatusCode() == 200 {
 				ret = "ok"
 			} else if e.StatusCode() >= 400 && e.StatusCode() < 500 {
@@ -71,8 +73,6 @@ func getErrorString(err error) string {
 			} else {
 				ret = "server_error"
 			}
-		} else {
-			ret = "server_error"
 		}
 	} else {
 		ret = "ok"
@@ -83,7 +83,8 @@ func getErrorString(err error) string {
 func getStatus(err error) string {
 	var ret string
 	if err != nil {
-		if e, ok := err.(*core.Error); ok {
+		var e *core.Error
+		if errors.As(err, &e) {
 			ret = fmt.Sprintf("%d", e.StatusCode())
 		} else {
 			ret = "500"

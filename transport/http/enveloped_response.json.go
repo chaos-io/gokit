@@ -3,8 +3,8 @@ package http
 import (
 	"unsafe"
 
+	"github.com/chaos-io/chaos/core"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/mojo-lang/core/go/pkg/mojo/core"
 )
 
 func init() {
