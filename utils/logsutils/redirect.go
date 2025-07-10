@@ -13,7 +13,11 @@ import (
 
 func GetLogFileName() string {
 	logConfig := &logs.Config{}
-	if err := config.Get("logs").Scan(logConfig); err != nil {
+	get, err := config.Get("logs")
+	if err != nil {
+		return ""
+	}
+	if err := get.Scan(logConfig); err != nil {
 		return ""
 	}
 

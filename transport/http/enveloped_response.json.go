@@ -1,6 +1,7 @@
 package http
 
 import (
+	"strconv"
 	"unsafe"
 
 	"github.com/chaos-io/chaos/core"
@@ -17,17 +18,34 @@ type EnvelopedResponseCodec struct{}
 type BareEnvelopedResponse EnvelopedResponse
 
 func (codec *EnvelopedResponseCodec) Decode(ptr unsafe.Pointer, iter *jsoniter.Iterator) {
-	a := iter.ReadAny()
 	resp := (*EnvelopedResponse)(ptr)
-	if a.ValueType() == jsoniter.ObjectValue {
-		bareResponse := (*BareEnvelopedResponse)(resp)
-		a.ToVal(bareResponse)
+	for filed := iter.ReadObject(); filed != ""; filed = iter.ReadObject() {
+		switch filed {
+		case "code":
+			if resp.Error == nil {
+				resp.Error = &core.Error{}
+			}
+			if resp.Error.Code == nil {
+				resp.Error.Code = &core.ErrorCode{}
+			}
 
-		err := &core.Error{}
-		a.ToVal(err)
-
-		if err.Code != nil || len(err.Message) > 0 {
-			resp.Error = err
+			codeStr := iter.ReadString()
+			if v, err := strconv.ParseInt(codeStr, 10, 32); err == nil {
+				resp.Error.Code.Code = int32(v)
+			}
+		case "message":
+			if resp.Error == nil {
+				resp.Error = &core.Error{}
+			}
+			resp.Error.Message = iter.ReadString()
+		case "data":
+			iter.ReadVal(&resp.Data)
+		case "totalCount":
+			iter.ReadVal(&resp.TotalCount)
+		case "nextPageToken":
+			iter.ReadVal(&resp.NextPageToken)
+		default:
+			iter.Skip()
 		}
 	}
 }
