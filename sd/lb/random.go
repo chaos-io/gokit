@@ -3,7 +3,6 @@ package lb
 import (
 	"crypto/rand"
 	"math/big"
-	"sync"
 
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/sd"
@@ -11,14 +10,11 @@ import (
 
 // NewRandom returns a load balancer that selects services randomly.
 func NewRandom(s sd.Endpointer) Balancer {
-	return &random{
-		s: s,
-	}
+	return &random{s: s}
 }
 
 type random struct {
-	s  sd.Endpointer
-	mu sync.Mutex
+	s sd.Endpointer
 }
 
 func (r *random) Endpoint() (endpoint.Endpoint, error) {

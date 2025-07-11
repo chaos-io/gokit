@@ -68,7 +68,7 @@ func (p *Process) SetEnv(env []string) {
 // Start runs the command
 func (p *Process) Start() (*Process, error) {
 	// command obtained from Config parent
-	p.Cmd = exec.Command(p.command[0], p.command[1:]...)
+	p.Cmd = exec.Command(p.command[0], p.command[1:]...) // #nosec G204 command injection
 
 	// change working directory
 	if p.Cwd != "" {
@@ -134,11 +134,11 @@ func (p *Process) Start() (*Process, error) {
 func (p *Process) Wait(stdout, stderr *os.File) {
 	err := p.Cmd.Wait()
 	if stdout != nil {
-		stdout.Close()
+		_ = stdout.Close()
 		close(p.QuitChan)
 	}
 	if stderr != nil {
-		stderr.Close()
+		_ = stderr.Close()
 	}
 	p.ErrorChan <- err
 }
