@@ -1,12 +1,14 @@
 package pagination
 
 import (
-	"reflect"
+	"errors"
+	"math"
 	"time"
 
 	"github.com/mr-tron/base58"
 )
 
+// PositionPageToken is a simple cursor-based pagination.
 type PositionPageToken struct {
 	time.Time
 	Position int32
@@ -36,6 +38,10 @@ func (p *PositionPageToken) Parse(token string) error {
 			return err
 		}
 
+		if len(bytes) < 8 {
+			return errors.New("invalid token: insufficient length data")
+		}
+
 		var seconds int64
 		seconds |= int64(bytes[3]) << 32
 		seconds |= int64(bytes[4]) << 24
@@ -60,20 +66,51 @@ func (p *PositionPageToken) Value() interface{} {
 }
 
 func (*PositionPageToken) Create(value interface{}) PageToken {
-	if value != nil {
-		token := &PositionPageToken{
-			Time: time.Now(),
-		}
-
-		v := reflect.ValueOf(value)
-		switch v.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			token.Position = int32(v.Int())
-			return token
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			token.Position = int32(v.Uint())
-			return token
-		}
+	var pos int32
+	switch v := value.(type) {
+	case int:
+		pos = int32(v)
+	case int8:
+		pos = int32(v)
+	case int16:
+		pos = int32(v)
+	case int32:
+		pos = v
+	case int64:
+		pos = toInt32Safe(v)
+	case uint:
+		pos = int32(v)
+	case uint8:
+		pos = int32(v)
+	case uint16:
+		pos = int32(v)
+	case uint32:
+		pos = int32(v)
+	case uint64:
+		pos = toInt32Safe(v)
+	default:
+		return &PositionPageToken{}
 	}
-	return &PositionPageToken{}
+
+	return &PositionPageToken{
+		Time:     time.Now(),
+		Position: pos,
+	}
+}
+
+func toInt32Safe(value interface{}) int32 {
+	switch v := value.(type) {
+	case int64:
+		if v > math.MaxInt32 || v < math.MinInt32 {
+			return 0
+		}
+		return int32(v)
+	case uint64:
+		if v > math.MaxInt32 {
+			return 0
+		}
+		return int32(v)
+	default:
+		return 0
+	}
 }

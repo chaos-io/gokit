@@ -12,6 +12,10 @@ func TestPositionPageToken_Create(t *testing.T) {
 
 	assert.NotEmpty(t, token)
 
+}
+
+func TestPositionPageToken_Parse(t *testing.T) {
+	token := (&PositionPageToken{}).Create(100).Format()
 	token2 := &PositionPageToken{}
 	err := token2.Parse(token)
 	assert.NoError(t, err)
