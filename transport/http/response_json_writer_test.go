@@ -13,7 +13,7 @@ import (
 func TestResponseJsonWriter_WriteHttpResponse(t *testing.T) {
 	const out = "string response"
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		NewResponseJsonWriter(out).WriteHttpResponse(context.Background(), w)
+		_ = NewResponseJsonWriter(out).WriteHttpResponse(context.Background(), w)
 	}
 
 	req := httptest.NewRequest("GET", "https://example.com/foo", nil)

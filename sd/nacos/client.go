@@ -106,7 +106,7 @@ func (c *Client) Instancer(service string) kitsd.Instancer {
 func (c *Client) WatchService(service, groupName string, clusters []string, ch chan struct{}) {
 	// Subscribe key=serviceName+groupName+cluster
 	// 注意:我们可以在相同的key添加多个SubscribeCallback.
-	c.client.Subscribe(&vo.SubscribeParam{
+	_ = c.client.Subscribe(&vo.SubscribeParam{
 		ServiceName: service,
 		GroupName:   groupName, // 默认值DEFAULT_GROUP
 		Clusters:    clusters,  // 默认值DEFAULT

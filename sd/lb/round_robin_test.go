@@ -34,11 +34,11 @@ func TestRoundRobin(t *testing.T) {
 		{2, 2, 2},
 		{3, 2, 2},
 	} {
-		endpoint, err := balancer.Endpoint()
+		_endpoint, err := balancer.Endpoint()
 		if err != nil {
 			t.Fatal(err)
 		}
-		endpoint(context.Background(), struct{}{})
+		_, _ = _endpoint(context.Background(), struct{}{})
 		if have := counts; !reflect.DeepEqual(want, have) {
 			t.Fatalf("%d: want %v, have %v", i, want, have)
 		}

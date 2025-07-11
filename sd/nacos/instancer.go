@@ -54,7 +54,7 @@ func (s *Instancer) loop() {
 		case <-ch:
 			instances, err := s.client.GetInstance(s.serviceName)
 			if err != nil {
-				s.logger.Log("msg", "failed to retrieve entries", "err", err)
+				_ = s.logger.Log("msg", "failed to retrieve entries", "err", err)
 				s.cache.Update(kitsd.Event{Err: err})
 				continue
 			}

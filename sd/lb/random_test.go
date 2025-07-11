@@ -29,8 +29,8 @@ func TestRandom(t *testing.T) {
 	balancer := NewRandom(endpointer, seed)
 
 	for i := 0; i < iterations; i++ {
-		endpoint, _ := balancer.Endpoint()
-		endpoint(context.Background(), struct{}{})
+		_endpoint, _ := balancer.Endpoint()
+		_, _ = _endpoint(context.Background(), struct{}{})
 	}
 
 	for i, have := range counts {
