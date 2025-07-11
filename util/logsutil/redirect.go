@@ -1,4 +1,4 @@
-package logsutils
+package logsutil
 
 import (
 	"fmt"

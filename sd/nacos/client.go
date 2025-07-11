@@ -1,6 +1,7 @@
 package nacos
 
 import (
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -26,13 +27,18 @@ func NewClient(urls []string, cfg *Config, logger log.Logger) *Client {
 		return nil
 	}
 	var sc []constant.ServerConfig
-	for _, url := range urls {
-		ip := strings.Split(url, ":")[0]
-		port, err := strconv.Atoi(strings.Split(url, ":")[1])
+	for _, _url := range urls {
+		host, port, err := net.SplitHostPort(_url)
 		if err != nil {
 			panic(err)
 		}
-		sc = append(sc, *constant.NewServerConfig(ip, uint64(port), constant.WithContextPath("/nacos")))
+
+		ip := host
+		_port, err := strconv.ParseUint(port, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		sc = append(sc, *constant.NewServerConfig(ip, _port, constant.WithContextPath("/nacos")))
 	}
 
 	namingClient, err := clients.NewNamingClient(
@@ -55,17 +61,21 @@ func (c *Client) Register(urlStr, name string, tags []string) error {
 	}
 
 	param := vo.RegisterInstanceParam{ServiceName: name}
-	url, err := url.Parse(urlStr)
+	_url, err := url.Parse(urlStr)
 	if err != nil {
 		return err
 	}
 
-	param.Ip = strings.Split(url.Host, ":")[0]
-	port, err := strconv.Atoi(strings.Split(url.Host, ":")[1])
+	host, port, err := net.SplitHostPort(_url.Host)
+	if err != nil {
+		return err
+	}
+	param.Ip = host
+	_port, err := strconv.ParseUint(port, 10, 64)
 	if err != nil {
 		return nil
 	}
-	param.Port = uint64(port)
+	param.Port = _port
 	param.Healthy = true
 	param.Enable = true
 	param.Ephemeral = true
