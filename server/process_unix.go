@@ -17,11 +17,11 @@ func SetSysProcAttr(p *Process) error {
 
 	// set owner
 	if p.user != nil {
-		uid, err := strconv.Atoi(p.user.Uid)
+		uid, err := strconv.ParseUint(p.user.Uid, 10, 32)
 		if err != nil {
 			return err
 		}
-		gid, err := strconv.Atoi(p.user.Gid)
+		gid, err := strconv.ParseUint(p.user.Gid, 10, 32)
 		if err != nil {
 			return err
 		}

@@ -2,6 +2,7 @@ package lb
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 
@@ -14,7 +15,6 @@ func TestRandom(t *testing.T) {
 		n          = 7
 		endpoints  = make([]endpoint.Endpoint, n)
 		counts     = make([]int, n)
-		seed       = int64(12345)
 		iterations = 1000000
 		want       = iterations / n
 		tolerance  = want / 100 // 1%
@@ -26,7 +26,7 @@ func TestRandom(t *testing.T) {
 	}
 
 	endpointer := sd.FixedEndpointer(endpoints)
-	balancer := NewRandom(endpointer, seed)
+	balancer := NewRandom(endpointer)
 
 	for i := 0; i < iterations; i++ {
 		_endpoint, _ := balancer.Endpoint()
@@ -43,9 +43,22 @@ func TestRandom(t *testing.T) {
 
 func TestRandomNoEndpoints(t *testing.T) {
 	endpointer := sd.FixedEndpointer{}
-	balancer := NewRandom(endpointer, 1415926)
+	balancer := NewRandom(endpointer)
 	_, err := balancer.Endpoint()
-	if want, have := ErrNoEndpoints, err; want != have {
-		t.Errorf("want %v, have %v", want, have)
+	if !errors.Is(err, ErrNoEndpoints) {
+		t.Errorf("want ErrNoEndpoints, got %v", err)
 	}
+}
+
+func BenchmarkRandom(b *testing.B) {
+	endpointer := sd.FixedEndpointer{}
+	nr := NewRandom(endpointer)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			_, _ = nr.Endpoint()
+		}
+	})
 }
