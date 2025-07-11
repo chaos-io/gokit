@@ -55,7 +55,7 @@ func (p *PositionPageToken) Parse(token string) error {
 		position |= int64(bytes[2]) << 0
 
 		p.Time = time.Unix(seconds, 0)
-		p.Position = int32(position)
+		p.Position = int32(position) // #nosec G115
 	}
 
 	return nil
@@ -69,6 +69,9 @@ func (*PositionPageToken) Create(value interface{}) PageToken {
 	var pos int32
 	switch v := value.(type) {
 	case int:
+		if v > math.MaxInt32 || v < math.MinInt32 {
+			return &PositionPageToken{}
+		}
 		pos = int32(v)
 	case int8:
 		pos = int32(v)
@@ -77,17 +80,29 @@ func (*PositionPageToken) Create(value interface{}) PageToken {
 	case int32:
 		pos = v
 	case int64:
-		pos = toInt32Safe(v)
+		if v > math.MaxInt32 || v < math.MinInt32 {
+			return &PositionPageToken{}
+		}
+		pos = int32(v)
 	case uint:
+		if v > math.MaxInt32 {
+			return &PositionPageToken{}
+		}
 		pos = int32(v)
 	case uint8:
 		pos = int32(v)
 	case uint16:
 		pos = int32(v)
 	case uint32:
+		if v > math.MaxInt32 {
+			return &PositionPageToken{}
+		}
 		pos = int32(v)
 	case uint64:
-		pos = toInt32Safe(v)
+		if v > math.MaxInt32 {
+			return &PositionPageToken{}
+		}
+		pos = int32(v)
 	default:
 		return &PositionPageToken{}
 	}
@@ -95,22 +110,5 @@ func (*PositionPageToken) Create(value interface{}) PageToken {
 	return &PositionPageToken{
 		Time:     time.Now(),
 		Position: pos,
-	}
-}
-
-func toInt32Safe(value interface{}) int32 {
-	switch v := value.(type) {
-	case int64:
-		if v > math.MaxInt32 || v < math.MinInt32 {
-			return 0
-		}
-		return int32(v)
-	case uint64:
-		if v > math.MaxInt32 {
-			return 0
-		}
-		return int32(v)
-	default:
-		return 0
 	}
 }
