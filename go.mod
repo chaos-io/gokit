@@ -4,6 +4,7 @@ go 1.23.0
 
 require (
 	github.com/chaos-io/chaos v0.0.0-20250710033010-9ecf0f17a1bb
+	github.com/chaos-io/core/go v0.0.0-20250722061710-7d3320bb64e1
 	github.com/go-kit/kit v0.13.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mr-tron/base58 v1.2.0
@@ -81,7 +82,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.7.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.26.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect

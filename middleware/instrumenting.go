@@ -9,7 +9,7 @@ import (
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/metrics"
 
-	"github.com/chaos-io/chaos/core"
+	"github.com/chaos-io/core/go/chaos/core"
 	"github.com/chaos-io/gokit/counter"
 )
 

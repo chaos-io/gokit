@@ -14,7 +14,10 @@ default: test
 env:
 	@go version
 test: env
-	go test -race -cover -coverprofile=coverage -covermode=atomic ./...
+	go test -race -cover -coverpkg ./... -coverprofile=coverage -covermode=atomic ./...
+	@go tool cover -html=coverage -o coverage.html
+	@go tool cover -func=coverage -o coverage.txt
+	@tail -n 1 coverage.txt
 
 golangci-lint:
 	$(if $(GO_LINT), ,go install $(GO_LINT_URI))

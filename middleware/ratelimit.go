@@ -7,7 +7,7 @@ import (
 	"github.com/go-kit/kit/endpoint"
 	"golang.org/x/time/rate"
 
-	"github.com/chaos-io/chaos/core"
+	"github.com/chaos-io/core/go/chaos/core"
 )
 
 func NewTokenBucketLimitMiddleware(bkt *rate.Limiter) endpoint.Middleware {
