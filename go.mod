@@ -6,6 +6,7 @@ require (
 	github.com/chaos-io/chaos v0.0.0-20250710033010-9ecf0f17a1bb
 	github.com/chaos-io/core/go v0.0.0-20250722061710-7d3320bb64e1
 	github.com/go-kit/kit v0.13.0
+	github.com/golang/mock v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mr-tron/base58 v1.2.0
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.2
@@ -58,7 +59,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.1 // indirect
