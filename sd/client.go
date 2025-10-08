@@ -8,7 +8,6 @@ import (
 
 	"github.com/chaos-io/gokit/sd/direct"
 	"github.com/chaos-io/gokit/sd/etcdv3"
-	"github.com/chaos-io/gokit/sd/nacos"
 )
 
 type Client interface {
@@ -46,8 +45,8 @@ func New(cfg *Config, logger log.Logger) Client {
 		return etcdv3.New(urls, cfg.EtcdV3, logger)
 	} else if mode == DirectMode {
 		return direct.New(cfg.Direct)
-	} else if cfg.Nacos != nil && mode == NacosMode {
-		return nacos.NewClient(urls, cfg.Nacos, logger)
+		// } else if cfg.Nacos != nil && mode == NacosMode {
+		// 	return nacos.NewClient(urls, cfg.Nacos, logger)
 	}
 	return nil
 }
