@@ -4,14 +4,15 @@ import (
 	"fmt"
 
 	"github.com/chaos-io/chaos/pkg/logs"
+	"github.com/go-kit/kit/log"
 )
 
 type kitLogger struct {
 	logs.Logger
 }
 
-func Logger() logs.Logger {
-	return logs.DefaultLogger()
+func Logger() log.Logger {
+	return kitLogger{Logger: logs.DefaultLogger()}
 }
 
 // Log err & level should be the first key
