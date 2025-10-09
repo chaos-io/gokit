@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chaos-io/chaos/logs"
+	"github.com/chaos-io/core/go/logs"
 )
 
 // Pid struct run.yml

@@ -3,8 +3,8 @@ package retry
 import (
 	"strings"
 
-	"github.com/chaos-io/chaos/config"
-	"github.com/chaos-io/chaos/logs"
+	"github.com/chaos-io/chaos/pkg/config"
+	"github.com/chaos-io/chaos/pkg/logs"
 )
 
 type Config struct {
@@ -15,11 +15,9 @@ type Config struct {
 
 func NewConfig(path ...string) *Config {
 	cfg := &Config{}
-
 	if err := config.ScanFrom(&cfg, "retry"); err != nil {
 		logs.Errorw("failed to get the retry config from "+strings.Join(path, "."), "error", err)
 		return nil
 	}
-
 	return cfg
 }

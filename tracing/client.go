@@ -3,7 +3,7 @@ package tracing
 import (
 	"context"
 
-	"github.com/chaos-io/chaos/logs"
+	"github.com/chaos-io/chaos/pkg/logs"
 	"go.opentelemetry.io/otel/trace"
 )
 

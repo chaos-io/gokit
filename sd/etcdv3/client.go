@@ -10,7 +10,7 @@ import (
 	kitsd "github.com/go-kit/kit/sd"
 	std "github.com/go-kit/kit/sd/etcdv3"
 
-	"github.com/chaos-io/chaos/logs"
+	"github.com/chaos-io/chaos/pkg/logs"
 )
 
 type Client struct {

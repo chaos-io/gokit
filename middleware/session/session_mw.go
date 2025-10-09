@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/chaos-io/chaos/logs"
+	"github.com/chaos-io/chaos/pkg/logs"
 	"github.com/go-kit/kit/endpoint"
 )
 

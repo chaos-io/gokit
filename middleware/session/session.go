@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chaos-io/chaos/logs"
+	"github.com/chaos-io/chaos/pkg/logs"
 )
 
 const (

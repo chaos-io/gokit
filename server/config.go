@@ -3,8 +3,8 @@ package server
 import (
 	"strings"
 
-	"github.com/chaos-io/chaos/config"
-	"github.com/chaos-io/chaos/logs"
+	"github.com/chaos-io/chaos/pkg/config"
+	"github.com/chaos-io/chaos/pkg/logs"
 )
 
 type Perf struct {
@@ -22,7 +22,6 @@ type Config struct {
 
 func NewConfig(path ...string) *Config {
 	cfg := &Config{}
-
 	if err := config.ScanFrom(&cfg, "server"); err != nil {
 		logs.Errorw("failed to get the server config from "+strings.Join(path, "."), "error", err)
 		return nil
