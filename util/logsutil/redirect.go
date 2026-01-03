@@ -7,7 +7,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/chaos-io/chaos/pkg/config"
+	"github.com/chaos-io/chaos/config"
 	"github.com/chaos-io/core/go/logs"
 )
 

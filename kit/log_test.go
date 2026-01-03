@@ -3,7 +3,7 @@ package kit
 import (
 	"testing"
 
-	"github.com/chaos-io/chaos/pkg/logs"
+	"github.com/chaos-io/chaos/logs"
 	"github.com/stretchr/testify/assert"
 )
 

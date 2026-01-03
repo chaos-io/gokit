@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/chaos-io/chaos/pkg/logs"
+	"github.com/chaos-io/chaos/logs"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"

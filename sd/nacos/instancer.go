@@ -6,7 +6,7 @@ package nacos
 //
 // 	"github.com/chaos-io/gokit/sd/internal/instance"
 //
-// 	"github.com/chaos-io/chaos/pkg/logs"
+// 	"github.com/chaos-io/chaos/logs"
 // )
 //
 // // Instancer yields instances stored in a certain etcd keyspace. Any kind of

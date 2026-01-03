@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/go-kit/kit/endpoint"
-	// "github.com/chaos-io/chaos/pkg/ctxcache"
+	// "github.com/chaos-io/chaos/ctxcache"
 )
 
 func CtxCacheMW(next endpoint.Endpoint) endpoint.Endpoint {

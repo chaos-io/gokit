@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/chaos-io/chaos/pkg/logs"
+	"github.com/chaos-io/chaos/logs"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"

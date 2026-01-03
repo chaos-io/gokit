@@ -3,8 +3,8 @@ package server
 import (
 	"strings"
 
-	"github.com/chaos-io/chaos/pkg/config"
-	"github.com/chaos-io/chaos/pkg/logs"
+	"github.com/chaos-io/chaos/config"
+	"github.com/chaos-io/chaos/logs"
 )
 
 type Perf struct {
