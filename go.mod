@@ -1,6 +1,6 @@
 module github.com/chaos-io/gokit
 
-go 1.24.11
+go 1.24.12
 
 require (
 	github.com/cenk/backoff v2.2.1+incompatible
