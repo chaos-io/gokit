@@ -15,53 +15,70 @@ func Logger() log.Logger {
 	return kitLogger{Logger: logs.DefaultLogger()}
 }
 
-// Log err & level should be the first key
-// msg may be first or only after the level
 func (l kitLogger) Log(kvs ...interface{}) error {
-	length := len(kvs)
-	secondMsgField := func(l int, key interface{}) bool { return l >= 4 && fmt.Sprint(key) == "msg" }
+	if len(kvs) == 0 {
+		return nil
+	}
 
-	if length >= 2 {
-		key := fmt.Sprint(kvs[0])
-		switch key {
-		case "err":
-			l.Errorw("", kvs...)
-		case "msg":
-			l.Infow(fmt.Sprint(kvs[1]), kvs[2:]...)
+	kvs = normalizeKeyvals(kvs)
+	entry := logs.Entry{
+		Level:      logs.InfoLevel,
+		CallerSkip: 2,
+	}
+
+	if len(kvs) >= 2 {
+		switch fmt.Sprint(kvs[0]) {
 		case "level":
-			level := fmt.Sprint(kvs[1])
-			switch level {
-			case "debug":
-				if secondMsgField(length, kvs[2]) {
-					l.Debugw(fmt.Sprint(kvs[3]), kvs[4:]...)
-				} else {
-					l.Debugw("", kvs[2:]...)
-				}
-			default:
-				fallthrough
-			case "info":
-				if secondMsgField(length, kvs[2]) {
-					l.Infow(fmt.Sprint(kvs[3]), kvs[4:]...)
-				} else {
-					l.Infow("", kvs[2:]...)
-				}
-			case "warn":
-				if secondMsgField(length, kvs[2]) {
-					l.Warnw(fmt.Sprint(kvs[3]), kvs[4:]...)
-				} else {
-					l.Warnw("", kvs[2:]...)
-				}
-			case "error":
-				if secondMsgField(length, kvs[2]) {
-					l.Errorw(fmt.Sprint(kvs[3]), kvs[4:]...)
-				} else {
-					l.Errorw("", kvs[2:]...)
-				}
-			}
-		default:
-			l.Infow("", kvs...)
+			entry.Level = parseLevel(kvs[1])
+			kvs = kvs[2:]
+		case "err", "error":
+			entry.Level = logs.ErrorLevel
 		}
 	}
 
+	if len(kvs) >= 2 && fmt.Sprint(kvs[0]) == "msg" {
+		entry.Message = fmt.Sprint(kvs[1])
+		kvs = kvs[2:]
+	}
+
+	entry.Fields = keyValuesToFields(kvs)
+	l.Logger.Log(entry)
+
 	return nil
+}
+
+func normalizeKeyvals(kvs []interface{}) []interface{} {
+	normalized := append([]interface{}(nil), kvs...)
+	if len(normalized)%2 != 0 {
+		normalized = append(normalized, log.ErrMissingValue)
+	}
+	return normalized
+}
+
+func parseLevel(level interface{}) logs.Level {
+	switch fmt.Sprint(level) {
+	case "debug":
+		return logs.DebugLevel
+	case "warn":
+		return logs.WarnLevel
+	case "error":
+		return logs.ErrorLevel
+	default:
+		return logs.InfoLevel
+	}
+}
+
+func keyValuesToFields(kvs []interface{}) []logs.Field {
+	if len(kvs) < 2 {
+		return nil
+	}
+
+	fields := make([]logs.Field, 0, len(kvs)/2)
+	for i := 0; i+1 < len(kvs); i += 2 {
+		fields = append(fields, logs.Field{
+			Key:   fmt.Sprint(kvs[i]),
+			Value: kvs[i+1],
+		})
+	}
+	return fields
 }

@@ -1,0 +1,13 @@
+openapi/
+docs/
+example/
+
+Makefile
+coverage*
+
+.git
+.idea
+.vscode
+.DS_Store
+.gitattributes
+
