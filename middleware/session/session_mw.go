@@ -21,7 +21,7 @@ func (f AuthProviderFunc) GetLoginUser(ctx context.Context, req any) (*User, err
 func NewSessionMW(ap AuthProvider, s ISession) endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
 		return func(ctx context.Context, req any) (resp any, err error) {
-			sessionID, ok := ctx.Value(SessionKey).(string)
+			sessionID, ok := SessionIDFromContext(ctx)
 			if !ok || sessionID == "" {
 				return nil, fmt.Errorf("session not found")
 			}

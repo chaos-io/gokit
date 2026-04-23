@@ -8,7 +8,6 @@ require (
 	github.com/chaos-io/core/go v0.0.0-20260418104954-551193c88639
 	github.com/go-kit/kit v0.13.0
 	github.com/go-playground/validator/v10 v10.28.0
-	github.com/golang/mock v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mr-tron/base58 v1.2.0
 	github.com/pkg/errors v0.9.1
