@@ -7,14 +7,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWithSessionID(t *testing.T) {
-	ctx := WithSessionID(context.Background(), "session-1")
+func TestContextHelpers(t *testing.T) {
+	ctx := WithToken(context.Background(), "token-1")
 
-	sessionID, ok := SessionIDFromContext(ctx)
+	token, ok := TokenFromContext(ctx)
 	require.True(t, ok)
-	require.Equal(t, "session-1", sessionID)
+	require.Equal(t, "token-1", token)
 
-	legacy, legacyOK := ctx.Value(SessionKey).(string)
-	require.True(t, legacyOK)
-	require.Equal(t, "session-1", legacy)
+	session := &Session{ID: "session-1", Subject: Subject{UserID: "user-1"}}
+	ctx = WithSession(ctx, session)
+
+	storedSession, ok := SessionFromContext(ctx)
+	require.True(t, ok)
+	require.Equal(t, session, storedSession)
+
+	user := &testUser{ID: "user-1", Name: "John Doe"}
+	ctx = WithUser(ctx, user)
+
+	anyUser, ok := AnyUserFromContext(ctx)
+	require.True(t, ok)
+	require.Equal(t, user, anyUser)
+
+	storedUser, ok := UserFromContext[*testUser](ctx)
+	require.True(t, ok)
+	require.Equal(t, user, storedUser)
+}
+
+type testUser struct {
+	ID   string
+	Name string
 }

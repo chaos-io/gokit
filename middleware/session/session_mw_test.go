@@ -4,48 +4,104 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestNewSessionMD(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		fn       AuthProviderFunc
-		wantUser *User
-		wantErr  assert.ErrorAssertionFunc
-	}{
-		{
-			name: "success",
-			fn: func(ctx context.Context, req any) (*User, error) {
-				return &User{ID: "123", Name: "John Doe", Email: "john.doe@example.com", AppID: 1}, nil
-			},
-			wantUser: &User{ID: "123", Name: "John Doe", Email: "john.doe@example.com", AppID: 1},
-		},
-		{
-			name: "error",
-			fn: func(ctx context.Context, req any) (*User, error) {
-				return nil, errors.New("error")
-			},
-			wantErr: assert.Error,
-		},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			md := NewSessionMW(tt.fn, NewSessionImpl())
-			md(func(ctx context.Context, req any) (resp any, err error) {
-				user, ok := UserInCtx(ctx)
-				assert.True(t, ok)
-				assert.Equal(t, tt.wantUser, user)
-				return nil, nil
-			})
-		})
-	}
+func TestValidateMiddleware(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	manager := newTestManager(t, NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
 
-	t.Run("context utils", func(t *testing.T) {
-		ctx := context.TODO()
-		user := &User{ID: "123", Name: "John Doe", Email: "john.doe@example.com", AppID: 1}
-		ctx = WithCtxUser(ctx, user)
-		assert.Equal(t, user.ID, UserIDInCtxOrEmpty(ctx))
-		assert.Equal(t, user.AppID, AppIDInCtxOrEmpty(ctx))
+	issued, err := manager.Issue(context.Background(), Subject{UserID: "user-1"})
+	require.NoError(t, err)
+
+	endpoint := ValidateMiddleware(manager)(func(ctx context.Context, req any) (any, error) {
+		session, ok := SessionFromContext(ctx)
+		require.True(t, ok)
+		require.Equal(t, issued.Session, session)
+		return "ok", nil
+	})
+
+	resp, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+	require.NoError(t, err)
+	require.Equal(t, "ok", resp)
+}
+
+func TestAuthenticateMiddleware(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	manager := newTestManager(t, NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
+
+	issued, err := manager.Issue(context.Background(), Subject{UserID: "user-1"})
+	require.NoError(t, err)
+
+	resolver := UserResolverFunc(func(ctx context.Context, session *Session, req any) (*ResolvedUser, error) {
+		return &ResolvedUser{
+			ID:    "user-1",
+			Value: &testUser{ID: "user-1", Name: "John Doe"},
+		}, nil
+	})
+
+	endpoint := AuthenticateMiddleware(manager, resolver)(func(ctx context.Context, req any) (any, error) {
+		user, ok := UserFromContext[*testUser](ctx)
+		require.True(t, ok)
+		require.Equal(t, "user-1", user.ID)
+		return "ok", nil
+	})
+
+	resp, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+	require.NoError(t, err)
+	require.Equal(t, "ok", resp)
+}
+
+func TestAuthenticateMiddlewareErrors(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	manager := newTestManager(t, NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
+
+	issued, err := manager.Issue(context.Background(), Subject{UserID: "user-1"})
+	require.NoError(t, err)
+
+	t.Run("validator required", func(t *testing.T) {
+		endpoint := ValidateMiddleware(nil)(func(ctx context.Context, req any) (any, error) {
+			t.Fatal("next should not be called")
+			return nil, nil
+		})
+
+		_, err := endpoint(context.Background(), nil)
+		require.ErrorIs(t, err, ErrValidatorRequired)
+	})
+
+	t.Run("resolver required", func(t *testing.T) {
+		endpoint := AuthenticateMiddleware(manager, nil)(func(ctx context.Context, req any) (any, error) {
+			t.Fatal("next should not be called")
+			return nil, nil
+		})
+
+		_, err := endpoint(context.Background(), nil)
+		require.ErrorIs(t, err, ErrUserResolverRequired)
+	})
+
+	t.Run("resolved user mismatch", func(t *testing.T) {
+		endpoint := AuthenticateMiddleware(manager, UserResolverFunc(func(ctx context.Context, session *Session, req any) (*ResolvedUser, error) {
+			return &ResolvedUser{ID: "other-user", Value: &testUser{ID: "other-user"}}, nil
+		}))(func(ctx context.Context, req any) (any, error) {
+			t.Fatal("next should not be called")
+			return nil, nil
+		})
+
+		_, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+		require.ErrorIs(t, err, ErrResolvedUserMismatch)
+	})
+
+	t.Run("resolver error", func(t *testing.T) {
+		endpoint := AuthenticateMiddleware(manager, UserResolverFunc(func(ctx context.Context, session *Session, req any) (*ResolvedUser, error) {
+			return nil, errors.New("db down")
+		}))(func(ctx context.Context, req any) (any, error) {
+			t.Fatal("next should not be called")
+			return nil, nil
+		})
+
+		_, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+		require.ErrorContains(t, err, "resolve user")
 	})
 }

@@ -4,48 +4,65 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/chaos-io/chaos/logs"
 	"github.com/go-kit/kit/endpoint"
 )
 
-type AuthProvider interface {
-	GetLoginUser(ctx context.Context, req any) (*User, error)
-}
+func ValidateMiddleware(validator Validator) endpoint.Middleware {
+	if validator == nil {
+		return errorMiddleware(ErrValidatorRequired)
+	}
 
-type AuthProviderFunc func(ctx context.Context, req any) (*User, error)
-
-func (f AuthProviderFunc) GetLoginUser(ctx context.Context, req any) (*User, error) {
-	return f(ctx, req)
-}
-
-func NewSessionMW(ap AuthProvider, s ISession) endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
-		return func(ctx context.Context, req any) (resp any, err error) {
-			sessionID, ok := SessionIDFromContext(ctx)
-			if !ok || sessionID == "" {
-				return nil, fmt.Errorf("session not found")
+		return func(ctx context.Context, req any) (any, error) {
+			token, ok := TokenFromContext(ctx)
+			if !ok {
+				return nil, ErrTokenRequired
 			}
-			logs.Debugw("session", "sessionID", sessionID)
 
-			session, err := s.ValidateSession(ctx, sessionID)
+			session, err := validator.Validate(ctx, token)
 			if err != nil {
-				return nil, fmt.Errorf("falied to validate session, error: %v", err)
+				return nil, fmt.Errorf("validate session: %w", err)
 			}
 
-			user, err := ap.GetLoginUser(ctx, req)
+			return next(WithSession(ctx, session), req)
+		}
+	}
+}
+
+func AuthenticateMiddleware(validator Validator, resolver UserResolver) endpoint.Middleware {
+	if resolver == nil {
+		return errorMiddleware(ErrUserResolverRequired)
+	}
+
+	validate := ValidateMiddleware(validator)
+
+	return func(next endpoint.Endpoint) endpoint.Endpoint {
+		return validate(func(ctx context.Context, req any) (any, error) {
+			session, ok := SessionFromContext(ctx)
+			if !ok {
+				return nil, ErrSessionNotFound
+			}
+
+			resolved, err := resolver.ResolveUser(ctx, session, req)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get login user, error: %v", err)
+				return nil, fmt.Errorf("resolve user: %w", err)
+			}
+			if resolved == nil || resolved.ID == "" || resolved.Value == nil {
+				return nil, ErrResolvedUserInvalid
+			}
+			if resolved.ID != session.Subject.UserID {
+				return nil, ErrResolvedUserMismatch
 			}
 
-			// 验证用户ID是否匹配
-			if user.ID != session.UserID {
-				return nil, fmt.Errorf("user id mismatch")
-			}
+			return next(WithUser(ctx, resolved.Value), req)
+		})
+	}
+}
 
-			// 注入用户信息到上下文
-			ctx = WithCtxUser(ctx, user)
-
-			return next(ctx, req)
+func errorMiddleware(err error) endpoint.Middleware {
+	return func(next endpoint.Endpoint) endpoint.Endpoint {
+		return func(ctx context.Context, req any) (any, error) {
+			return nil, err
 		}
 	}
 }

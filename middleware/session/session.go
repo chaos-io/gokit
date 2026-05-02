@@ -2,96 +2,300 @@ package session
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
+	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
-
-	"github.com/chaos-io/chaos/logs"
 )
 
-const (
-	SessionKey     = "session_key"
-	SessionExpires = 7 * 24 * time.Hour
+const DefaultTTL = 7 * 24 * time.Hour
+
+var (
+	ErrStoreRequired            = errors.New("session store is required")
+	ErrTokenCodecRequired       = errors.New("session token codec is required")
+	ErrValidatorRequired        = errors.New("session validator is required")
+	ErrTTLInvalid               = errors.New("session ttl must be positive")
+	ErrSessionIDGeneratorNeeded = errors.New("session id generator is required")
+	ErrSessionUserIDRequired    = errors.New("session user id is required")
+	ErrSessionIDRequired        = errors.New("session id is required")
+	ErrSessionInvalid           = errors.New("session is invalid")
+	ErrSessionNotFound          = errors.New("session not found")
+	ErrSessionExpired           = errors.New("session expired")
+	ErrSessionRevoked           = errors.New("session revoked")
+	ErrSessionStateMismatch     = errors.New("session state does not match token claims")
+	ErrRevocationUnsupported    = errors.New("session store does not support revocation")
 )
 
-// 用于签名的密钥（在实际应用中应从配置中读取或使用环境变量）
-var hmacSecret = []byte("my-session-hmac-key")
+type Subject struct {
+	UserID string `json:"user_id"`
+	AppID  int32  `json:"app_id,omitempty"`
+}
 
 type Session struct {
-	UserID    string
-	SessionID int64
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	ID        string    `json:"id"`
+	Subject   Subject   `json:"subject"`
+	IssuedAt  time.Time `json:"issued_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	RevokedAt time.Time `json:"revoked_at,omitempty"`
 }
 
-//go:generate mockgen -destination=mocks/session.go -package=mocks . ISession
-type ISession interface {
-	GenerateSessionKey(ctx context.Context, session *Session) (string, error)
-	ValidateSession(ctx context.Context, sessionID string) (*Session, error)
+type IssuedSession struct {
+	Token   string   `json:"token"`
+	Session *Session `json:"session"`
 }
 
-type sessionImpl struct{}
-
-func NewSessionImpl() ISession {
-	return &sessionImpl{}
+type TokenClaims struct {
+	SessionID string `json:"sid"`
+	UserID    string `json:"uid"`
+	AppID     int32  `json:"aid,omitempty"`
+	IssuedAt  int64  `json:"iat"`
+	ExpiresAt int64  `json:"exp"`
 }
 
-func (s *sessionImpl) GenerateSessionKey(ctx context.Context, session *Session) (string, error) {
-	now := time.Now()
-	session.CreatedAt = now
-	session.ExpiresAt = now.Add(SessionExpires)
+type Issuer interface {
+	Issue(ctx context.Context, subject Subject) (*IssuedSession, error)
+}
 
-	data, err := json.Marshal(session)
+type Validator interface {
+	Validate(ctx context.Context, token string) (*Session, error)
+}
+
+type Revoker interface {
+	Revoke(ctx context.Context, sessionID string) error
+}
+
+type Store interface {
+	Save(ctx context.Context, session *Session) error
+	Find(ctx context.Context, sessionID string) (*Session, error)
+}
+
+type RevocationStore interface {
+	Revoke(ctx context.Context, sessionID string, revokedAt time.Time) error
+}
+
+type TokenCodec interface {
+	Encode(ctx context.Context, claims TokenClaims) (string, error)
+	Decode(ctx context.Context, token string) (*TokenClaims, error)
+}
+
+type Option func(*config) error
+
+type config struct {
+	ttl         time.Duration
+	now         func() time.Time
+	idGenerator func() (string, error)
+}
+
+type Manager struct {
+	store      Store
+	codec      TokenCodec
+	ttl        time.Duration
+	now        func() time.Time
+	generateID func() (string, error)
+}
+
+func WithTTL(ttl time.Duration) Option {
+	return func(cfg *config) error {
+		if ttl <= 0 {
+			return ErrTTLInvalid
+		}
+		cfg.ttl = ttl
+		return nil
+	}
+}
+
+func WithClock(now func() time.Time) Option {
+	return func(cfg *config) error {
+		if now == nil {
+			return nil
+		}
+		cfg.now = now
+		return nil
+	}
+}
+
+func WithIDGenerator(generator func() (string, error)) Option {
+	return func(cfg *config) error {
+		if generator == nil {
+			return ErrSessionIDGeneratorNeeded
+		}
+		cfg.idGenerator = generator
+		return nil
+	}
+}
+
+func NewManager(store Store, codec TokenCodec, opts ...Option) (*Manager, error) {
+	if store == nil {
+		return nil, ErrStoreRequired
+	}
+	if codec == nil {
+		return nil, ErrTokenCodecRequired
+	}
+
+	cfg, err := newConfig(opts...)
 	if err != nil {
+		return nil, err
+	}
+
+	return &Manager{
+		store:      store,
+		codec:      codec,
+		ttl:        cfg.ttl,
+		now:        cfg.now,
+		generateID: cfg.idGenerator,
+	}, nil
+}
+
+func (m *Manager) Issue(ctx context.Context, subject Subject) (*IssuedSession, error) {
+	if subject.UserID == "" {
+		return nil, ErrSessionUserIDRequired
+	}
+
+	sessionID, err := m.generateID()
+	if err != nil {
+		return nil, fmt.Errorf("generate session id: %w", err)
+	}
+	if sessionID == "" {
+		return nil, ErrSessionIDRequired
+	}
+
+	now := m.now().UTC().Truncate(time.Second)
+	session := &Session{
+		ID:        sessionID,
+		Subject:   subject,
+		IssuedAt:  now,
+		ExpiresAt: now.Add(m.ttl),
+	}
+
+	token, err := m.codec.Encode(ctx, claimsFromSession(session))
+	if err != nil {
+		return nil, fmt.Errorf("encode session token: %w", err)
+	}
+
+	if err := m.store.Save(ctx, session); err != nil {
+		return nil, fmt.Errorf("save session: %w", err)
+	}
+
+	return &IssuedSession{
+		Token:   token,
+		Session: cloneSession(session),
+	}, nil
+}
+
+func (m *Manager) Validate(ctx context.Context, token string) (*Session, error) {
+	claims, err := m.codec.Decode(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("decode session token: %w", err)
+	}
+
+	session, err := m.store.Find(ctx, claims.SessionID)
+	if err != nil {
+		return nil, fmt.Errorf("find session: %w", err)
+	}
+
+	if err := validateSession(claims, session, m.now().UTC()); err != nil {
+		return nil, err
+	}
+
+	return cloneSession(session), nil
+}
+
+func (m *Manager) Revoke(ctx context.Context, sessionID string) error {
+	if sessionID == "" {
+		return ErrSessionIDRequired
+	}
+
+	store, ok := m.store.(RevocationStore)
+	if !ok {
+		return ErrRevocationUnsupported
+	}
+
+	if err := store.Revoke(ctx, sessionID, m.now().UTC().Truncate(time.Second)); err != nil {
+		return fmt.Errorf("revoke session: %w", err)
+	}
+
+	return nil
+}
+
+func newConfig(opts ...Option) (*config, error) {
+	cfg := &config{
+		ttl:         DefaultTTL,
+		now:         time.Now,
+		idGenerator: randomSessionID,
+	}
+
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	if cfg.ttl <= 0 {
+		return nil, ErrTTLInvalid
+	}
+	if cfg.idGenerator == nil {
+		return nil, ErrSessionIDGeneratorNeeded
+	}
+
+	return cfg, nil
+}
+
+func claimsFromSession(session *Session) TokenClaims {
+	return TokenClaims{
+		SessionID: session.ID,
+		UserID:    session.Subject.UserID,
+		AppID:     session.Subject.AppID,
+		IssuedAt:  session.IssuedAt.Unix(),
+		ExpiresAt: session.ExpiresAt.Unix(),
+	}
+}
+
+func validateSession(claims *TokenClaims, session *Session, now time.Time) error {
+	switch {
+	case claims == nil:
+		return ErrSessionInvalid
+	case session == nil:
+		return ErrSessionNotFound
+	case session.ID == "":
+		return ErrSessionInvalid
+	case session.Subject.UserID == "":
+		return ErrSessionInvalid
+	case !session.RevokedAt.IsZero():
+		return ErrSessionRevoked
+	case now.After(session.ExpiresAt):
+		return ErrSessionExpired
+	case claims.SessionID != session.ID:
+		return ErrSessionStateMismatch
+	case claims.UserID != session.Subject.UserID:
+		return ErrSessionStateMismatch
+	case claims.AppID != session.Subject.AppID:
+		return ErrSessionStateMismatch
+	case claims.IssuedAt != session.IssuedAt.Unix():
+		return ErrSessionStateMismatch
+	case claims.ExpiresAt != session.ExpiresAt.Unix():
+		return ErrSessionStateMismatch
+	default:
+		return nil
+	}
+}
+
+func randomSessionID() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
-
-	// 计算HMAC签名以确定完整性
-	h := hmac.New(sha256.New, hmacSecret)
-	h.Write(data)
-	sign := h.Sum(nil)
-
-	finalData := append(data, sign...)
-
-	// base64编码最终结果
-	return base64.RawURLEncoding.EncodeToString(finalData), nil
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func (s *sessionImpl) ValidateSession(ctx context.Context, sessionID string) (*Session, error) {
-	logs.Debugw("validate session", "sessionID", sessionID)
-
-	data, err := base64.RawURLEncoding.DecodeString(sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode session id (%s): %w", sessionID, err)
+func cloneSession(session *Session) *Session {
+	if session == nil {
+		return nil
 	}
 
-	if len(data) < 32 {
-		return nil, fmt.Errorf("invalid session id (%s)", sessionID)
-	}
-
-	// 分离会话数据和签名
-	signature := data[len(data)-32:]
-	sessionData := data[:len(data)-32]
-
-	h := hmac.New(sha256.New, hmacSecret)
-	h.Write(sessionData)
-	expectedSignature := h.Sum(nil)
-
-	if !hmac.Equal(signature, expectedSignature) {
-		return nil, fmt.Errorf("invalid session signature (%s)", sessionID)
-	}
-
-	var session Session
-	if err := json.Unmarshal(sessionData, &session); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal session data (%s): %w", sessionID, err)
-	}
-
-	if time.Now().After(session.ExpiresAt) {
-		return nil, fmt.Errorf("session expired")
-	}
-
-	return &session, nil
+	cloned := *session
+	return &cloned
 }
