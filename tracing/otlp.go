@@ -13,10 +13,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func NewTracer(ctx context.Context, serviceName, otlpEndpoint string) (trace.Tracer, func(ctx context.Context) error, error) {
+func NewTracer(ctx context.Context, serviceName, otlpEndpoint string) (trace.Tracer, ShutdownFunc, error) {
 	provider, err := NewTraceProvider(ctx, serviceName, otlpEndpoint)
 	if err != nil {
-		return nil, nil, err
+		return noopTracer(serviceName), NoopShutdown, err
 	}
 
 	otel.SetTracerProvider(provider)

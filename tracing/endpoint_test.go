@@ -162,11 +162,14 @@ func TestNewWithNilConfigReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if tracer != nil {
-		t.Fatal("expected nil tracer")
+	if tracer == nil {
+		t.Fatal("expected noop tracer")
 	}
-	if shutdown != nil {
-		t.Fatal("expected nil shutdown")
+	if shutdown == nil {
+		t.Fatal("expected noop shutdown")
+	}
+	if err := shutdown(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

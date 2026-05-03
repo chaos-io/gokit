@@ -4,22 +4,21 @@ import (
 	"context"
 	"errors"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
-func New(name string) (trace.Tracer, func(context.Context) error, error) {
+func New(name string) (trace.Tracer, ShutdownFunc, error) {
 	return NewWith(context.Background(), name, NewConfig("tracing"))
 }
 
-func NewWith(ctx context.Context, name string, cfg *Config) (trace.Tracer, func(context.Context) error, error) {
+func NewWith(ctx context.Context, name string, cfg *Config) (trace.Tracer, ShutdownFunc, error) {
 	if cfg == nil {
-		return nil, nil, errors.New("tracing config is nil")
+		return noopTracer(name), NoopShutdown, errors.New("tracing config is nil")
 	}
 
 	if cfg.Enable {
 		return NewTracer(ctx, name, cfg.Endpoint)
 	}
 
-	return otel.Tracer(name), func(context.Context) error { return nil }, nil
+	return noopTracer(name), NoopShutdown, nil
 }
