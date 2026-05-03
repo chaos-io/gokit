@@ -1,3 +1,0 @@
-tracing:
-  enable: true
-  url: 192.168.5.143:4318

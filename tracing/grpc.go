@@ -3,35 +3,18 @@ package tracing
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 )
 
-// GRPCToContext returns a grpc RequestFunc that tries to join with an
-// OpenTelemetry trace found in `md` and starts a new Span called
-// `operationName` accordingly. If no trace could be found in `md`, the Span
-// will be a trace root. The Span is incorporated in the returned Context.
-func GRPCToContext(tracer trace.Tracer, operationName string) func(ctx context.Context, md metadata.MD) context.Context {
-	return func(ctx context.Context, md metadata.MD) context.Context {
-		propagator := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
-		ctx = propagator.Extract(ctx, metadataTextMap(md))
+var grpcPropagator = propagation.NewCompositeTextMapPropagator(
+	propagation.TraceContext{},
+	propagation.Baggage{},
+)
 
-		ctx, span := tracer.Start(ctx, operationName, trace.WithSpanKind(trace.SpanKindServer))
-		defer span.End()
-
-		// Add gRPC metadata as attributes to the span. This is useful for debugging
-		// and analysis. Consider making this configurable if you have sensitive data
-		// in your metadata.
-		for key, values := range md {
-			for _, value := range values {
-				span.SetAttributes(attribute.String("grpc.metadata."+key, value))
-			}
-		}
-
-		return ctx
-	}
+// GRPCToContext extracts OpenTelemetry propagation metadata from md.
+func GRPCToContext(ctx context.Context, md metadata.MD) context.Context {
+	return grpcPropagator.Extract(ctx, metadataTextMap(md))
 }
 
 // metadataTextMap implements the TextMapCarrier interface for gRPC metadata.

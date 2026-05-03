@@ -2,24 +2,24 @@ package tracing
 
 import (
 	"context"
+	"errors"
 
-	"github.com/chaos-io/chaos/logs"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
-func New(name string) (trace.Tracer, func(context.Context) error) {
-	return NewWith(name, NewConfig("tracing"))
+func New(name string) (trace.Tracer, func(context.Context) error, error) {
+	return NewWith(context.Background(), name, NewConfig("tracing"))
 }
 
-func NewWith(name string, cfg *Config) (trace.Tracer, func(context.Context) error) {
+func NewWith(ctx context.Context, name string, cfg *Config) (trace.Tracer, func(context.Context) error, error) {
 	if cfg == nil {
-		logs.Fatal("failed to create the tracer coz of given nil config")
-		return nil, nil
+		return nil, nil, errors.New("tracing config is nil")
 	}
 
 	if cfg.Enable {
-		return NewTracer(context.Background(), name, cfg.Url)
+		return NewTracer(ctx, name, cfg.Endpoint)
 	}
 
-	return nil, nil
+	return otel.Tracer(name), func(context.Context) error { return nil }, nil
 }

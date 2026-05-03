@@ -24,8 +24,6 @@ github.com/cenkalti/backoff/v5 v5.0.2 h1:rIfFVxEf1QsI7E1ZHfp/B4DF/6QBAUhmgkxc0H7
 github.com/cenkalti/backoff/v5 v5.0.2/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/chaos-io/chaos v0.0.0-20260418120206-d24f2d179488 h1:jiTfdzeSkFDuAn+wlw+WH8U/+7iQ23Nh0/YdQRYg9sE=
-github.com/chaos-io/chaos v0.0.0-20260418120206-d24f2d179488/go.mod h1:s4br3JcI2NtYIKtFuGZ3wmeW4UwkRQgbf+2y1xF1aRw=
 github.com/chaos-io/chaos v0.0.0-20260420025818-cc6c9370328f h1:z0tbTxf6xCLZWBIplcpbaOEP6wYOacd078BuL2veDpk=
 github.com/chaos-io/chaos v0.0.0-20260420025818-cc6c9370328f/go.mod h1:YOYKaqVXsQeh2YJHgooUA/Hn7ulMoM3xgX+5nOunbqs=
 github.com/chaos-io/core/go v0.0.0-20260418104954-551193c88639 h1:mMznp83vEbAfGuPpvLy2zWegGAucvMk0Avx5v2K6DM4=

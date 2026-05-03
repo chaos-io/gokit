@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // EndpointOptions holds the options for tracing an endpoint
@@ -25,6 +26,9 @@ type EndpointOptions struct {
 	// GetAttributes is an optional function that can extract attributes
 	// from the context and add them to the span.
 	GetAttributes func(ctx context.Context) []attribute.KeyValue
+
+	// SpanStartOptions holds OpenTelemetry options used when starting spans.
+	SpanStartOptions []trace.SpanStartOption
 }
 
 // EndpointOption allows for functional options to endpoint tracing middleware.
@@ -64,5 +68,12 @@ func WithAttributes(attributes ...attribute.KeyValue) EndpointOption {
 func WithAttributesFunc(getAttributes func(ctx context.Context) []attribute.KeyValue) EndpointOption {
 	return func(o *EndpointOptions) {
 		o.GetAttributes = getAttributes
+	}
+}
+
+// WithSpanStartOptions adds OpenTelemetry options used when starting spans.
+func WithSpanStartOptions(options ...trace.SpanStartOption) EndpointOption {
+	return func(o *EndpointOptions) {
+		o.SpanStartOptions = append(o.SpanStartOptions, options...)
 	}
 }

@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -28,13 +29,14 @@ func TraceEndpoint(tracer trace.Tracer, operationName string, opts ...EndpointOp
 
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
 		return func(ctx context.Context, request interface{}) (response interface{}, err error) {
+			spanName := operationName
 			if cfg.GetOperationName != nil {
 				if newOperationName := cfg.GetOperationName(ctx, operationName); newOperationName != "" {
-					operationName = newOperationName
+					spanName = newOperationName
 				}
 			}
 
-			ctx, span := tracer.Start(ctx, operationName)
+			ctx, span := tracer.Start(ctx, spanName, cfg.SpanStartOptions...)
 			defer span.End()
 
 			applyAttributes(span, cfg.Attributes)
@@ -45,11 +47,15 @@ func TraceEndpoint(tracer trace.Tracer, operationName string, opts ...EndpointOp
 
 			defer func() {
 				if err != nil {
+					span.RecordError(err)
 					span.SetStatus(codes.Error, err.Error())
-					if lbErr, ok := err.(lb.RetryError); ok {
+					var lbErr lb.RetryError
+					if errors.As(err, &lbErr) {
 						// handle errors originating from lb.Retry
 						for idx, rawErr := range lbErr.RawErrors {
-							span.SetAttributes(attribute.String("gokit.retry.error."+strconv.Itoa(idx+1), rawErr.Error()))
+							if rawErr != nil {
+								span.SetAttributes(attribute.String("gokit.retry.error."+strconv.Itoa(idx+1), rawErr.Error()))
+							}
 						}
 
 						return
@@ -61,14 +67,16 @@ func TraceEndpoint(tracer trace.Tracer, operationName string, opts ...EndpointOp
 
 				// test for business error
 				if res, ok := response.(endpoint.Failer); ok && res.Failed() != nil {
-					span.SetAttributes(attribute.String("gokit.business.error", res.Failed().Error()))
+					businessErr := res.Failed()
+					span.RecordError(businessErr)
+					span.SetAttributes(attribute.String("gokit.business.error", businessErr.Error()))
 
 					if cfg.IgnoreBusinessError {
 						return
 					}
 
 					// treating business error as real error in span.
-					span.SetStatus(codes.Error, res.Failed().Error())
+					span.SetStatus(codes.Error, businessErr.Error())
 
 					return
 				}
@@ -80,17 +88,17 @@ func TraceEndpoint(tracer trace.Tracer, operationName string, opts ...EndpointOp
 }
 
 // TraceServer returns a Middleware that wraps the `next` Endpoint in an
-// OpenTelemetry Span called `operationName` with server span.kind tag..
+// OpenTelemetry Span called `operationName` with server span kind.
 func TraceServer(tracer trace.Tracer, operationName string, opts ...EndpointOption) endpoint.Middleware {
-	opts = append(opts, WithAttributes(attribute.String("span.kind", "server")))
+	opts = append(opts, WithSpanStartOptions(trace.WithSpanKind(trace.SpanKindServer)))
 
 	return TraceEndpoint(tracer, operationName, opts...)
 }
 
 // TraceClient returns a Middleware that wraps the `next` Endpoint in an
-// OpenTelemetry Span called `operationName` with client span.kind tag.
+// OpenTelemetry Span called `operationName` with client span kind.
 func TraceClient(tracer trace.Tracer, operationName string, opts ...EndpointOption) endpoint.Middleware {
-	opts = append(opts, WithAttributes(attribute.String("span.kind", "client")))
+	opts = append(opts, WithSpanStartOptions(trace.WithSpanKind(trace.SpanKindClient)))
 
 	return TraceEndpoint(tracer, operationName, opts...)
 }

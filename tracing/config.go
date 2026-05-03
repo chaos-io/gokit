@@ -8,9 +8,11 @@ import (
 )
 
 type Config struct {
-	Enable bool   `json:"enable" yaml:"Enable" default:"false"`
-	Url    string `json:"url" yaml:"url" default:"localhost:6831"`
+	Enable   bool   `json:"enable" yaml:"enable" default:"false"`
+	Endpoint string `json:"endpoint" yaml:"endpoint" default:"localhost:4318"`
 }
+
+const DefaultOTLPEndpoint = "localhost:4318"
 
 func NewConfig(path ...string) *Config {
 	cfg := &Config{}
