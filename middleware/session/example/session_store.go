@@ -1,0 +1,174 @@
+package repo
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/chaos-io/chaos/db"
+	sessionmw "github.com/chaos-io/gokit/middleware/session"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+var (
+	_ sessionmw.Store           = (*SessionStore)(nil)
+	_ sessionmw.RevocationStore = (*SessionStore)(nil)
+)
+
+type SessionStore struct {
+	provider db.Provider
+}
+
+type SessionModel struct {
+	ID        string     `gorm:"type:varchar(64);primaryKey"`
+	UserID    string     `gorm:"type:varchar(64);not null;index:idx_user_sessions_subject"`
+	AppID     int32      `gorm:"not null;default:0;index:idx_user_sessions_subject"`
+	IssuedAt  time.Time  `gorm:"not null"`
+	ExpiresAt time.Time  `gorm:"not null;index"`
+	RevokedAt *time.Time `gorm:"index"`
+}
+
+func (SessionModel) TableName() string {
+	return "user_sessions"
+}
+
+func NewSessionStore(provider db.Provider) (*SessionStore, error) {
+	if provider == nil {
+		return nil, fmt.Errorf("db provider is nil")
+	}
+	return &SessionStore{provider: provider}, nil
+}
+
+func AutoMigrateSession(provider db.Provider) error {
+	if provider == nil {
+		return fmt.Errorf("db provider is nil")
+	}
+
+	gdb := provider.NewSession(context.Background())
+	if gdb == nil {
+		return fmt.Errorf("gorm DB is nil")
+	}
+	if err := gdb.AutoMigrate(&SessionModel{}); err != nil {
+		return fmt.Errorf("auto migrate session model: %w", err)
+	}
+	return nil
+}
+
+func (s *SessionStore) Save(ctx context.Context, session *sessionmw.Session) error {
+	model, err := sessionToModel(session)
+	if err != nil {
+		return err
+	}
+
+	tx := s.provider.NewSession(ctx).Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err := tx.Model(&SessionModel{}).
+		Where("user_id = ? AND app_id = ? AND revoked_at IS NULL", model.UserID, model.AppID).
+		Update("revoked_at", model.IssuedAt).Error; err != nil {
+		return err
+	}
+
+	if err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(model).Error; err != nil {
+		return err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func (s *SessionStore) Find(ctx context.Context, sessionID string) (*sessionmw.Session, error) {
+	if sessionID == "" {
+		return nil, sessionmw.ErrSessionIDRequired
+	}
+
+	var model SessionModel
+	if err := s.provider.NewSession(ctx).First(&model, "id = ?", sessionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, sessionmw.ErrSessionNotFound
+		}
+		return nil, fmt.Errorf("find session: %w", err)
+	}
+
+	return modelToSession(&model), nil
+}
+
+func (s *SessionStore) Revoke(ctx context.Context, sessionID string, revokedAt time.Time) error {
+	if sessionID == "" {
+		return sessionmw.ErrSessionIDRequired
+	}
+
+	result := s.provider.NewSession(ctx).
+		Model(&SessionModel{}).
+		Where("id = ?", sessionID).
+		Update("revoked_at", revokedAt)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return sessionmw.ErrSessionNotFound
+	}
+	return nil
+}
+
+func sessionToModel(session *sessionmw.Session) (*SessionModel, error) {
+	if session == nil {
+		return nil, sessionmw.ErrSessionInvalid
+	}
+	if session.ID == "" {
+		return nil, sessionmw.ErrSessionIDRequired
+	}
+	if session.Subject.UserID == "" {
+		return nil, sessionmw.ErrSessionUserIDRequired
+	}
+
+	var revokedAt *time.Time
+	if !session.RevokedAt.IsZero() {
+		revoked := session.RevokedAt
+		revokedAt = &revoked
+	}
+
+	return &SessionModel{
+		ID:        session.ID,
+		UserID:    session.Subject.UserID,
+		AppID:     session.Subject.AppID,
+		IssuedAt:  session.IssuedAt,
+		ExpiresAt: session.ExpiresAt,
+		RevokedAt: revokedAt,
+	}, nil
+}
+
+func modelToSession(model *SessionModel) *sessionmw.Session {
+	if model == nil {
+		return nil
+	}
+
+	var revokedAt time.Time
+	if model.RevokedAt != nil {
+		revokedAt = *model.RevokedAt
+	}
+
+	return &sessionmw.Session{
+		ID: model.ID,
+		Subject: sessionmw.Subject{
+			UserID: model.UserID,
+			AppID:  model.AppID,
+		},
+		IssuedAt:  model.IssuedAt,
+		ExpiresAt: model.ExpiresAt,
+		RevokedAt: revokedAt,
+	}
+}

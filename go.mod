@@ -4,7 +4,7 @@ go 1.24.12
 
 require (
 	github.com/cenk/backoff v2.2.1+incompatible
-	github.com/chaos-io/chaos v0.0.0-20260418120206-d24f2d179488
+	github.com/chaos-io/chaos v0.0.0-20260420025818-cc6c9370328f
 	github.com/chaos-io/core/go v0.0.0-20260418104954-551193c88639
 	github.com/go-kit/kit v0.13.0
 	github.com/go-playground/validator/v10 v10.28.0
