@@ -13,6 +13,10 @@ import (
 )
 
 const (
+	TransportDEBUG = "DEBUG"
+	TransportHTTP  = "HTTP"
+	TransportGRPC  = "GRPC"
+
 	DefaultReadHeaderTimeout = 5 * time.Second
 	DefaultShutdownTimeout   = 10 * time.Second
 )
@@ -37,14 +41,14 @@ func NewHTTPServer(addr string, handler http.Handler) *http.Server {
 
 func (servers *TransportServers) Listen(debugAddr, httpAddr, grpcAddr string) error {
 	var err error
-	if servers.DebugListener, err = Listen("debug", debugAddr); err != nil {
+	if servers.DebugListener, err = Listen(TransportDEBUG, debugAddr); err != nil {
 		return err
 	}
-	if servers.HTTPListener, err = Listen("HTTP", httpAddr); err != nil {
+	if servers.HTTPListener, err = Listen(TransportHTTP, httpAddr); err != nil {
 		servers.CloseListeners()
 		return err
 	}
-	if servers.GRPCListener, err = Listen("gRPC", grpcAddr); err != nil {
+	if servers.GRPCListener, err = Listen(TransportGRPC, grpcAddr); err != nil {
 		servers.CloseListeners()
 		return err
 	}
@@ -52,9 +56,9 @@ func (servers *TransportServers) Listen(debugAddr, httpAddr, grpcAddr string) er
 }
 
 func (servers *TransportServers) Serve(errc chan<- error) {
-	go ServeHTTP(errc, "debug", servers.DebugServer, servers.DebugListener)
-	go ServeHTTP(errc, "HTTP", servers.HTTPServer, servers.HTTPListener)
-	go ServeGRPC(errc, servers.GRPCServer, servers.GRPCListener)
+	go ServeHTTP(errc, TransportDEBUG, servers.DebugServer, servers.DebugListener)
+	go ServeHTTP(errc, TransportHTTP, servers.HTTPServer, servers.HTTPListener)
+	go ServeGRPC(errc, TransportGRPC, servers.GRPCServer, servers.GRPCListener)
 }
 
 func (servers *TransportServers) HTTPAddr() string {
@@ -89,12 +93,12 @@ func (servers *TransportServers) Shutdown() error {
 	var errs []error
 	if servers.DebugServer != nil {
 		if err := servers.DebugServer.Shutdown(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown debug server: %w", err))
+			errs = append(errs, fmt.Errorf("shutdown %s server: %w", TransportDEBUG, err))
 		}
 	}
 	if servers.HTTPServer != nil {
 		if err := servers.HTTPServer.Shutdown(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown HTTP server: %w", err))
+			errs = append(errs, fmt.Errorf("shutdown %s server: %w", TransportHTTP, err))
 		}
 	}
 	if servers.GRPCServer != nil {
@@ -122,11 +126,11 @@ func ServeHTTP(errc chan<- error, transport string, server *http.Server, listene
 	}
 }
 
-func ServeGRPC(errc chan<- error, server *grpc.Server, listener net.Listener) {
-	logs.Infow("begin grpc server", "transport", "gRPC", "address", listenerAddr(listener))
+func ServeGRPC(errc chan<- error, transport string, server *grpc.Server, listener net.Listener) {
+	logs.Infow("begin server", "transport", transport, "address", listenerAddr(listener))
 
 	if err := server.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-		errc <- fmt.Errorf("gRPC server: %w", err)
+		errc <- fmt.Errorf("%s server: %w", transport, err)
 	}
 }
 
@@ -153,7 +157,7 @@ func shutdownGRPC(ctx context.Context, server *grpc.Server) error {
 		return nil
 	case <-ctx.Done():
 		server.Stop()
-		return fmt.Errorf("shutdown gRPC server: %w", ctx.Err())
+		return fmt.Errorf("shutdown %s server: %w", TransportGRPC, ctx.Err())
 	}
 }
 
