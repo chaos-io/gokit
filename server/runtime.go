@@ -45,11 +45,9 @@ func (servers *TransportServers) Listen(debugAddr, httpAddr, grpcAddr string) er
 		return err
 	}
 	if servers.HTTPListener, err = Listen(TransportHTTP, httpAddr); err != nil {
-		servers.CloseListeners()
 		return err
 	}
 	if servers.GRPCListener, err = Listen(TransportGRPC, grpcAddr); err != nil {
-		servers.CloseListeners()
 		return err
 	}
 	return nil
