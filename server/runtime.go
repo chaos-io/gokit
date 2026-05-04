@@ -132,17 +132,6 @@ func ServeGRPC(errc chan<- error, transport string, server *grpc.Server, listene
 	}
 }
 
-func WaitForShutdown(ctx context.Context, serverName string, errc <-chan error) error {
-	select {
-	case <-ctx.Done():
-		logs.Infow("server shutdown requested", "server", serverName, "reason", ctx.Err())
-		return nil
-	case err := <-errc:
-		logs.Errorw("server stopped unexpectedly", "server", serverName, "error", err)
-		return err
-	}
-}
-
 func shutdownGRPC(ctx context.Context, server *grpc.Server) error {
 	stopped := make(chan struct{})
 	go func() {
