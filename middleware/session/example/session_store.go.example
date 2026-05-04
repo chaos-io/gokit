@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/chaos-io/chaos/db"
-	sessionmw "github.com/chaos-io/gokit/middleware/session"
+	"github.com/chaos-io/gokit/session"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 var (
-	_ sessionmw.Store           = (*SessionStore)(nil)
-	_ sessionmw.RevocationStore = (*SessionStore)(nil)
+	_ session.Store           = (*SessionStore)(nil)
+	_ session.RevocationStore = (*SessionStore)(nil)
 )
 
 type SessionStore struct {
@@ -56,8 +56,8 @@ func AutoMigrateSession(provider db.Provider) error {
 	return nil
 }
 
-func (s *SessionStore) Save(ctx context.Context, session *sessionmw.Session) error {
-	model, err := sessionToModel(session)
+func (s *SessionStore) Save(ctx context.Context, sess *session.Session) error {
+	model, err := sessionToModel(sess)
 	if err != nil {
 		return err
 	}
@@ -90,15 +90,15 @@ func (s *SessionStore) Save(ctx context.Context, session *sessionmw.Session) err
 	return nil
 }
 
-func (s *SessionStore) Find(ctx context.Context, sessionID string) (*sessionmw.Session, error) {
+func (s *SessionStore) Find(ctx context.Context, sessionID string) (*session.Session, error) {
 	if sessionID == "" {
-		return nil, sessionmw.ErrSessionIDRequired
+		return nil, session.ErrSessionIDRequired
 	}
 
 	var model SessionModel
 	if err := s.provider.NewSession(ctx).First(&model, "id = ?", sessionID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, sessionmw.ErrSessionNotFound
+			return nil, session.ErrSessionNotFound
 		}
 		return nil, fmt.Errorf("find session: %w", err)
 	}
@@ -108,7 +108,7 @@ func (s *SessionStore) Find(ctx context.Context, sessionID string) (*sessionmw.S
 
 func (s *SessionStore) Revoke(ctx context.Context, sessionID string, revokedAt time.Time) error {
 	if sessionID == "" {
-		return sessionmw.ErrSessionIDRequired
+		return session.ErrSessionIDRequired
 	}
 
 	result := s.provider.NewSession(ctx).
@@ -119,39 +119,39 @@ func (s *SessionStore) Revoke(ctx context.Context, sessionID string, revokedAt t
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return sessionmw.ErrSessionNotFound
+		return session.ErrSessionNotFound
 	}
 	return nil
 }
 
-func sessionToModel(session *sessionmw.Session) (*SessionModel, error) {
-	if session == nil {
-		return nil, sessionmw.ErrSessionInvalid
+func sessionToModel(sess *session.Session) (*SessionModel, error) {
+	if sess == nil {
+		return nil, session.ErrSessionInvalid
 	}
-	if session.ID == "" {
-		return nil, sessionmw.ErrSessionIDRequired
+	if sess.ID == "" {
+		return nil, session.ErrSessionIDRequired
 	}
-	if session.Subject.UserID == "" {
-		return nil, sessionmw.ErrSessionUserIDRequired
+	if sess.Subject.UserID == "" {
+		return nil, session.ErrSessionUserIDRequired
 	}
 
 	var revokedAt *time.Time
-	if !session.RevokedAt.IsZero() {
-		revoked := session.RevokedAt
+	if !sess.RevokedAt.IsZero() {
+		revoked := sess.RevokedAt
 		revokedAt = &revoked
 	}
 
 	return &SessionModel{
-		ID:        session.ID,
-		UserID:    session.Subject.UserID,
-		AppID:     session.Subject.AppID,
-		IssuedAt:  session.IssuedAt,
-		ExpiresAt: session.ExpiresAt,
+		ID:        sess.ID,
+		UserID:    sess.Subject.UserID,
+		AppID:     sess.Subject.AppID,
+		IssuedAt:  sess.IssuedAt,
+		ExpiresAt: sess.ExpiresAt,
 		RevokedAt: revokedAt,
 	}, nil
 }
 
-func modelToSession(model *SessionModel) *sessionmw.Session {
+func modelToSession(model *SessionModel) *session.Session {
 	if model == nil {
 		return nil
 	}
@@ -161,9 +161,9 @@ func modelToSession(model *SessionModel) *sessionmw.Session {
 		revokedAt = *model.RevokedAt
 	}
 
-	return &sessionmw.Session{
+	return &session.Session{
 		ID: model.ID,
-		Subject: sessionmw.Subject{
+		Subject: session.Subject{
 			UserID: model.UserID,
 			AppID:  model.AppID,
 		},

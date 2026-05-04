@@ -6,36 +6,37 @@ import (
 	"testing"
 	"time"
 
+	gokitsession "github.com/chaos-io/gokit/session"
 	"github.com/stretchr/testify/require"
 )
 
 func TestValidateMiddleware(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
-	manager := newTestManager(t, NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
+	manager := newTestManager(t, gokitsession.NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
 
-	issued, err := manager.Issue(context.Background(), Subject{UserID: "user-1"})
+	issued, err := manager.Issue(context.Background(), gokitsession.Subject{UserID: "user-1"})
 	require.NoError(t, err)
 
 	endpoint := ValidateMiddleware(manager)(func(ctx context.Context, req any) (any, error) {
-		session, ok := SessionFromContext(ctx)
+		session, ok := gokitsession.SessionFromContext(ctx)
 		require.True(t, ok)
 		require.Equal(t, issued.Session, session)
 		return "ok", nil
 	})
 
-	resp, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+	resp, err := endpoint(gokitsession.WithToken(context.Background(), issued.Token), nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp)
 }
 
 func TestAuthenticateMiddleware(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
-	manager := newTestManager(t, NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
+	manager := newTestManager(t, gokitsession.NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
 
-	issued, err := manager.Issue(context.Background(), Subject{UserID: "user-1"})
+	issued, err := manager.Issue(context.Background(), gokitsession.Subject{UserID: "user-1"})
 	require.NoError(t, err)
 
-	resolver := UserResolverFunc(func(ctx context.Context, session *Session, req any) (*ResolvedUser, error) {
+	resolver := UserResolverFunc(func(ctx context.Context, session *gokitsession.Session, req any) (*ResolvedUser, error) {
 		return &ResolvedUser{
 			ID:    "user-1",
 			Value: &testUser{ID: "user-1", Name: "John Doe"},
@@ -49,16 +50,16 @@ func TestAuthenticateMiddleware(t *testing.T) {
 		return "ok", nil
 	})
 
-	resp, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+	resp, err := endpoint(gokitsession.WithToken(context.Background(), issued.Token), nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp)
 }
 
 func TestAuthenticateMiddlewareErrors(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
-	manager := newTestManager(t, NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
+	manager := newTestManager(t, gokitsession.NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
 
-	issued, err := manager.Issue(context.Background(), Subject{UserID: "user-1"})
+	issued, err := manager.Issue(context.Background(), gokitsession.Subject{UserID: "user-1"})
 	require.NoError(t, err)
 
 	t.Run("validator required", func(t *testing.T) {
@@ -68,7 +69,7 @@ func TestAuthenticateMiddlewareErrors(t *testing.T) {
 		})
 
 		_, err := endpoint(context.Background(), nil)
-		require.ErrorIs(t, err, ErrValidatorRequired)
+		require.ErrorIs(t, err, gokitsession.ErrValidatorRequired)
 	})
 
 	t.Run("resolver required", func(t *testing.T) {
@@ -82,26 +83,26 @@ func TestAuthenticateMiddlewareErrors(t *testing.T) {
 	})
 
 	t.Run("resolved user mismatch", func(t *testing.T) {
-		endpoint := AuthenticateMiddleware(manager, UserResolverFunc(func(ctx context.Context, session *Session, req any) (*ResolvedUser, error) {
+		endpoint := AuthenticateMiddleware(manager, UserResolverFunc(func(ctx context.Context, session *gokitsession.Session, req any) (*ResolvedUser, error) {
 			return &ResolvedUser{ID: "other-user", Value: &testUser{ID: "other-user"}}, nil
 		}))(func(ctx context.Context, req any) (any, error) {
 			t.Fatal("next should not be called")
 			return nil, nil
 		})
 
-		_, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+		_, err := endpoint(gokitsession.WithToken(context.Background(), issued.Token), nil)
 		require.ErrorIs(t, err, ErrResolvedUserMismatch)
 	})
 
 	t.Run("resolver error", func(t *testing.T) {
-		endpoint := AuthenticateMiddleware(manager, UserResolverFunc(func(ctx context.Context, session *Session, req any) (*ResolvedUser, error) {
+		endpoint := AuthenticateMiddleware(manager, UserResolverFunc(func(ctx context.Context, session *gokitsession.Session, req any) (*ResolvedUser, error) {
 			return nil, errors.New("db down")
 		}))(func(ctx context.Context, req any) (any, error) {
 			t.Fatal("next should not be called")
 			return nil, nil
 		})
 
-		_, err := endpoint(WithToken(context.Background(), issued.Token), nil)
+		_, err := endpoint(gokitsession.WithToken(context.Background(), issued.Token), nil)
 		require.ErrorContains(t, err, "resolve user")
 	})
 }

@@ -4,32 +4,33 @@ import (
 	"context"
 	"fmt"
 
+	gokitsession "github.com/chaos-io/gokit/session"
 	"github.com/go-kit/kit/endpoint"
 )
 
-func ValidateMiddleware(validator Validator) endpoint.Middleware {
+func ValidateMiddleware(validator gokitsession.Validator) endpoint.Middleware {
 	if validator == nil {
-		return errorMiddleware(ErrValidatorRequired)
+		return errorMiddleware(gokitsession.ErrValidatorRequired)
 	}
 
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
 		return func(ctx context.Context, req any) (any, error) {
-			token, ok := TokenFromContext(ctx)
+			token, ok := gokitsession.TokenFromContext(ctx)
 			if !ok {
-				return nil, ErrTokenRequired
+				return nil, gokitsession.ErrTokenRequired
 			}
 
-			session, err := validator.Validate(ctx, token)
+			ctx, err := contextWithValidatedSession(ctx, validator, token)
 			if err != nil {
 				return nil, fmt.Errorf("validate session: %w", err)
 			}
 
-			return next(WithSession(ctx, session), req)
+			return next(ctx, req)
 		}
 	}
 }
 
-func AuthenticateMiddleware(validator Validator, resolver UserResolver) endpoint.Middleware {
+func AuthenticateMiddleware(validator gokitsession.Validator, resolver UserResolver) endpoint.Middleware {
 	if resolver == nil {
 		return errorMiddleware(ErrUserResolverRequired)
 	}
@@ -38,9 +39,9 @@ func AuthenticateMiddleware(validator Validator, resolver UserResolver) endpoint
 
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
 		return validate(func(ctx context.Context, req any) (any, error) {
-			session, ok := SessionFromContext(ctx)
+			session, ok := gokitsession.SessionFromContext(ctx)
 			if !ok {
-				return nil, ErrSessionNotFound
+				return nil, gokitsession.ErrSessionNotFound
 			}
 
 			resolved, err := resolver.ResolveUser(ctx, session, req)

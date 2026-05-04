@@ -3,6 +3,8 @@ package session
 import (
 	"context"
 	"errors"
+
+	gokitsession "github.com/chaos-io/gokit/session"
 )
 
 var (
@@ -17,11 +19,11 @@ type ResolvedUser struct {
 }
 
 type UserResolver interface {
-	ResolveUser(ctx context.Context, session *Session, req any) (*ResolvedUser, error)
+	ResolveUser(ctx context.Context, session *gokitsession.Session, req any) (*ResolvedUser, error)
 }
 
-type UserResolverFunc func(ctx context.Context, session *Session, req any) (*ResolvedUser, error)
+type UserResolverFunc func(ctx context.Context, session *gokitsession.Session, req any) (*ResolvedUser, error)
 
-func (f UserResolverFunc) ResolveUser(ctx context.Context, session *Session, req any) (*ResolvedUser, error) {
+func (f UserResolverFunc) ResolveUser(ctx context.Context, session *gokitsession.Session, req any) (*ResolvedUser, error) {
 	return f(ctx, session, req)
 }

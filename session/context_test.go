@@ -21,19 +21,4 @@ func TestContextHelpers(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, session, storedSession)
 
-	user := &testUser{ID: "user-1", Name: "John Doe"}
-	ctx = WithUser(ctx, user)
-
-	anyUser, ok := AnyUserFromContext(ctx)
-	require.True(t, ok)
-	require.Equal(t, user, anyUser)
-
-	storedUser, ok := UserFromContext[*testUser](ctx)
-	require.True(t, ok)
-	require.Equal(t, user, storedUser)
-}
-
-type testUser struct {
-	ID   string
-	Name string
 }
