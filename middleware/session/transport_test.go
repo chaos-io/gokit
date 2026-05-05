@@ -65,6 +65,28 @@ func TestHTTPMiddlewareReadsCookie(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
+func TestHTTPMiddlewareUsesCustomTokenHeader(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	manager := newTestManager(t, gokitsession.NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
+
+	issued, err := manager.Issue(context.Background(), gokitsession.Subject{UserID: "user-1"})
+	require.NoError(t, err)
+
+	handler := HTTPMiddleware(manager, WithTokenHeader("X-Auth-Token"))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, ok := gokitsession.SessionFromContext(r.Context())
+		require.True(t, ok)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Auth-Token", issued.Token)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
 func TestUnaryServerInterceptorReadsMetadata(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	manager := newTestManager(t, gokitsession.NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
@@ -104,6 +126,26 @@ func TestStreamServerInterceptorReadsMetadata(t *testing.T) {
 	})
 
 	require.NoError(t, err)
+}
+
+func TestUnaryServerInterceptorUsesCustomBearerHeader(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	manager := newTestManager(t, gokitsession.NewMemoryStore(), testClock(&now), testIDSequence("session-1"))
+
+	issued, err := manager.Issue(context.Background(), gokitsession.Subject{UserID: "user-1"})
+	require.NoError(t, err)
+
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-auth", "Bearer "+issued.Token))
+	interceptor := UnaryServerInterceptor(manager, WithBearerHeader("X-Auth"))
+
+	resp, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
+		_, ok := gokitsession.SessionFromContext(ctx)
+		require.True(t, ok)
+		return "ok", nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "ok", resp)
 }
 
 func TestUnaryServerInterceptorRejectsMissingToken(t *testing.T) {

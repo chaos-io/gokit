@@ -18,10 +18,38 @@ const (
 	SessionTokenCookie  = "session_token"
 )
 
-func HTTPMiddleware(validator gokitsession.Validator) func(http.Handler) http.Handler {
+type TransportOption func(*config)
+
+type config struct {
+	bearerHeader string
+	tokenHeader  string
+	tokenCookie  string
+}
+
+func WithBearerHeader(name string) TransportOption {
+	return func(cfg *config) {
+		cfg.bearerHeader = strings.TrimSpace(name)
+	}
+}
+
+func WithTokenHeader(name string) TransportOption {
+	return func(cfg *config) {
+		cfg.tokenHeader = strings.TrimSpace(name)
+	}
+}
+
+func WithTokenCookie(name string) TransportOption {
+	return func(cfg *config) {
+		cfg.tokenCookie = strings.TrimSpace(name)
+	}
+}
+
+func HTTPMiddleware(validator gokitsession.Validator, opts ...TransportOption) func(http.Handler) http.Handler {
+	cfg := newConfig(opts...)
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, err := authenticateHTTP(r.Context(), validator, r)
+			ctx, err := authenticateHTTP(r.Context(), validator, r, cfg)
 			if err != nil {
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
@@ -32,9 +60,11 @@ func HTTPMiddleware(validator gokitsession.Validator) func(http.Handler) http.Ha
 	}
 }
 
-func UnaryServerInterceptor(validator gokitsession.Validator) grpc.UnaryServerInterceptor {
+func UnaryServerInterceptor(validator gokitsession.Validator, opts ...TransportOption) grpc.UnaryServerInterceptor {
+	cfg := newConfig(opts...)
+
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		ctx, err := authenticateMetadata(ctx, validator)
+		ctx, err := authenticateMetadata(ctx, validator, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -43,9 +73,11 @@ func UnaryServerInterceptor(validator gokitsession.Validator) grpc.UnaryServerIn
 	}
 }
 
-func StreamServerInterceptor(validator gokitsession.Validator) grpc.StreamServerInterceptor {
+func StreamServerInterceptor(validator gokitsession.Validator, opts ...TransportOption) grpc.StreamServerInterceptor {
+	cfg := newConfig(opts...)
+
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		ctx, err := authenticateMetadata(stream.Context(), validator)
+		ctx, err := authenticateMetadata(stream.Context(), validator, cfg)
 		if err != nil {
 			return err
 		}
@@ -54,12 +86,12 @@ func StreamServerInterceptor(validator gokitsession.Validator) grpc.StreamServer
 	}
 }
 
-func authenticateHTTP(ctx context.Context, validator gokitsession.Validator, r *http.Request) (context.Context, error) {
+func authenticateHTTP(ctx context.Context, validator gokitsession.Validator, r *http.Request, cfg config) (context.Context, error) {
 	if validator == nil {
 		return ctx, gokitsession.ErrValidatorRequired
 	}
 
-	token, ok := tokenFromHTTPRequest(r)
+	token, ok := tokenFromHTTPRequest(r, cfg)
 	if !ok {
 		return ctx, gokitsession.ErrTokenRequired
 	}
@@ -67,12 +99,12 @@ func authenticateHTTP(ctx context.Context, validator gokitsession.Validator, r *
 	return contextWithValidatedSession(ctx, validator, token)
 }
 
-func authenticateMetadata(ctx context.Context, validator gokitsession.Validator) (context.Context, error) {
+func authenticateMetadata(ctx context.Context, validator gokitsession.Validator, cfg config) (context.Context, error) {
 	if validator == nil {
 		return ctx, status.Error(codes.Unauthenticated, gokitsession.ErrValidatorRequired.Error())
 	}
 
-	token, ok := tokenFromMetadata(ctx)
+	token, ok := tokenFromMetadata(ctx, cfg)
 	if !ok {
 		return ctx, status.Error(codes.Unauthenticated, gokitsession.ErrTokenRequired.Error())
 	}
@@ -85,14 +117,21 @@ func authenticateMetadata(ctx context.Context, validator gokitsession.Validator)
 	return ctx, nil
 }
 
-func tokenFromHTTPRequest(r *http.Request) (string, bool) {
-	if token, ok := bearerToken(r.Header.Get(AuthorizationHeader)); ok {
-		return token, true
+func tokenFromHTTPRequest(r *http.Request, cfg config) (string, bool) {
+	if cfg.bearerHeader != "" {
+		if token, ok := bearerToken(r.Header.Get(cfg.bearerHeader)); ok {
+			return token, true
+		}
 	}
-	if token := strings.TrimSpace(r.Header.Get(SessionTokenHeader)); token != "" {
-		return token, true
+	if cfg.tokenHeader != "" {
+		if token := strings.TrimSpace(r.Header.Get(cfg.tokenHeader)); token != "" {
+			return token, true
+		}
 	}
-	if cookie, err := r.Cookie(SessionTokenCookie); err == nil {
+	if cfg.tokenCookie == "" {
+		return "", false
+	}
+	if cookie, err := r.Cookie(cfg.tokenCookie); err == nil {
 		if token := strings.TrimSpace(cookie.Value); token != "" {
 			return token, true
 		}
@@ -100,18 +139,38 @@ func tokenFromHTTPRequest(r *http.Request) (string, bool) {
 	return "", false
 }
 
-func tokenFromMetadata(ctx context.Context) (string, bool) {
+func tokenFromMetadata(ctx context.Context, cfg config) (string, bool) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", false
 	}
-	if token, ok := firstMetadataBearer(md, strings.ToLower(AuthorizationHeader)); ok {
-		return token, true
+	if cfg.bearerHeader != "" {
+		if token, ok := firstMetadataBearer(md, strings.ToLower(cfg.bearerHeader)); ok {
+			return token, true
+		}
 	}
-	if token, ok := firstMetadataValue(md, strings.ToLower(SessionTokenHeader)); ok {
-		return token, true
+	if cfg.tokenHeader != "" {
+		if token, ok := firstMetadataValue(md, strings.ToLower(cfg.tokenHeader)); ok {
+			return token, true
+		}
 	}
 	return "", false
+}
+
+func newConfig(opts ...TransportOption) config {
+	cfg := config{
+		bearerHeader: AuthorizationHeader,
+		tokenHeader:  SessionTokenHeader,
+		tokenCookie:  SessionTokenCookie,
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+
+	return cfg
 }
 
 func firstMetadataBearer(md metadata.MD, key string) (string, bool) {
