@@ -13,9 +13,8 @@ import (
 )
 
 type Config struct {
-	// sd mode, like etcd, nacos, direct
-	Mode      string         `json:"mode" yaml:"mode" db:"mode"`
-	Transport string         `json:"transport" yaml:"transport" db:"transport"` // http, or grpc
+	Mode      string         `json:"mode" yaml:"mode" db:"mode"`                // etcd, nacos, direct
+	Transport string         `json:"transport" yaml:"transport" db:"transport"` // http, grpc
 	Url       string         `json:"url" yaml:"url"`
 	Retry     *retry.Config  `json:"retry" yaml:"retry" db:"retry"`
 	EtcdV3    *etcdv3.Config `json:"etcd" yaml:"etcd"`
