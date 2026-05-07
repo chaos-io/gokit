@@ -1,6 +1,8 @@
 package sd
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/go-kit/kit/log"
@@ -31,22 +33,57 @@ type Client interface {
 const (
 	EtcdMode   = "etcd"
 	DirectMode = "direct"
-	NacosMode  = "nacos"
 )
 
-func New(cfg *Config, logger log.Logger) Client {
-	if cfg == nil || len(cfg.Url) == 0 {
-		return nil
+var (
+	errNilConfig       = errors.New("sd: nil config")
+	errEtcdURLRequired = errors.New("sd: etcd url is required")
+)
+
+func New(cfg *Config, logger log.Logger) (Client, error) {
+	if cfg == nil {
+		return nil, errNilConfig
 	}
 
-	mode := strings.ToLower(cfg.Mode)
-	urls := strings.Split(cfg.Url, ";")
-	if cfg.EtcdV3 != nil && (mode == EtcdMode || len(mode) == 0) {
-		return etcdv3.New(urls, cfg.EtcdV3, logger)
-	} else if mode == DirectMode {
-		return direct.New(cfg.Direct)
-		// } else if cfg.Nacos != nil && mode == NacosMode {
-		// 	return nacos.NewClient(urls, cfg.Nacos, logger)
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	if mode == "" {
+		mode = inferMode(cfg)
 	}
-	return nil
+
+	switch mode {
+	case EtcdMode:
+		urls := splitURLs(cfg.Url)
+		if len(urls) == 0 {
+			return nil, errEtcdURLRequired
+		}
+		if cfg.EtcdV3 == nil {
+			cfg.EtcdV3 = &etcdv3.Config{}
+		}
+		return etcdv3.New(urls, cfg.EtcdV3, logger)
+	case DirectMode:
+		return direct.New(cfg.Direct), nil
+	default:
+		return nil, fmt.Errorf("sd: unsupported mode %q", cfg.Mode)
+	}
+}
+
+func inferMode(cfg *Config) string {
+	if len(cfg.Direct) > 0 {
+		return DirectMode
+	}
+	if cfg.EtcdV3 != nil || cfg.Url != "" {
+		return EtcdMode
+	}
+	return ""
+}
+
+func splitURLs(raw string) []string {
+	parts := strings.Split(raw, ";")
+	urls := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			urls = append(urls, part)
+		}
+	}
+	return urls
 }

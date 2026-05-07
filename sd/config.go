@@ -1,8 +1,6 @@
 package sd
 
 import (
-	"strings"
-
 	"github.com/chaos-io/chaos/config"
 	"github.com/chaos-io/chaos/logs"
 
@@ -13,19 +11,19 @@ import (
 )
 
 type Config struct {
-	Mode      string         `json:"mode" yaml:"mode" db:"mode"`                // etcd, nacos, direct
-	Transport string         `json:"transport" yaml:"transport" db:"transport"` // http, grpc
-	Url       string         `json:"url" yaml:"url"`
-	Retry     *retry.Config  `json:"retry" yaml:"retry" db:"retry"`
-	EtcdV3    *etcdv3.Config `json:"etcd" yaml:"etcd"`
+	Mode      string                    `json:"mode" yaml:"mode" db:"mode"`                // etcd, direct
+	Transport string                    `json:"transport" yaml:"transport" db:"transport"` // http, grpc
+	Url       string                    `json:"url" yaml:"url"`
+	Retry     *retry.Config             `json:"retry" yaml:"retry" db:"retry"`
+	EtcdV3    *etcdv3.Config            `json:"etcd" yaml:"etcd"`
+	Direct    map[string]*direct.Config `json:"direct" yaml:"direct" db:"direct"`
 	// Nacos     *nacos.Config             `json:"nacos" yaml:"nacos"`
-	Direct map[string]*direct.Config `json:"direct" yaml:"direct" db:"direct"`
 }
 
-func NewConfig(path ...string) *Config {
+func NewConfig() *Config {
 	cfg := &Config{}
 	if err := config.ScanFrom(&cfg, "sd"); err != nil {
-		logs.Errorw("failed to get the sd config from "+strings.Join(path, "."), "error", err)
+		logs.Errorw("failed to get the sd config", "error", err)
 		return nil
 	}
 	return cfg

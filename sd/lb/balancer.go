@@ -13,3 +13,6 @@ type Balancer interface {
 
 // ErrNoEndpoints is returned when no qualifying endpoints are available.
 var ErrNoEndpoints = errors.New("no endpoints available")
+
+// ErrNilBalancer is returned when retry is configured without a balancer.
+var ErrNilBalancer = errors.New("nil balancer")

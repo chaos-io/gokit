@@ -2,24 +2,36 @@ package etcdv3
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
 	kitsd "github.com/go-kit/kit/sd"
 	std "github.com/go-kit/kit/sd/etcdv3"
-
-	"github.com/chaos-io/chaos/logs"
 )
 
 type Client struct {
 	client    std.Client
 	registrar *std.Registrar
 	logger    log.Logger
+	mtx       sync.Mutex
 }
 
-func New(urls []string, cfg *Config, logger log.Logger) *Client {
+func New(urls []string, cfg *Config, logger log.Logger) (*Client, error) {
+	if len(urls) == 0 {
+		return nil, errors.New("sd/etcdv3: urls are required")
+	}
+	if cfg == nil {
+		cfg = &Config{}
+	}
+	if logger == nil {
+		logger = log.NewNopLogger()
+	}
+
 	options := std.ClientOptions{
 		// Path to trusted ca file
 		CACert: cfg.CACert,
@@ -46,52 +58,93 @@ func New(urls []string, cfg *Config, logger log.Logger) *Client {
 	// Build the client.
 	client, err := std.NewClient(context.Background(), urls, options)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("sd/etcdv3: create client: %w", err)
 	}
 
 	return &Client{
 		client: client,
 		logger: logger,
-	}
+	}, nil
 }
 
 func (c *Client) Register(urlStr, name string, tags []string) error {
-	// Build the registrar.
-
-	if !strings.HasPrefix(urlStr, "etcd://") {
-		urlStr = "etcd://" + urlStr
+	if c == nil || c.client == nil {
+		return errors.New("sd/etcdv3: nil client")
 	}
-
-	url, err := url.Parse(urlStr)
+	service, err := newService(urlStr, name)
 	if err != nil {
 		return err
 	}
 
-	registrar := std.NewRegistrar(c.client, std.Service{
-		Key:   "/" + name + "/" + url.Host,
-		Value: url.Host,
-	}, c.logger)
-
+	// Build the registrar.
+	registrar := std.NewRegistrar(c.client, service, c.logger)
+	c.mtx.Lock()
 	c.registrar = registrar
+	c.mtx.Unlock()
 	registrar.Register()
-
-	s, _ := c.client.GetEntries("/")
-	logs.Info("all key:", s)
 	return nil
 }
 
 func (c *Client) Deregister() error {
-	c.registrar.Deregister()
+	if c == nil {
+		return nil
+	}
+	c.mtx.Lock()
+	registrar := c.registrar
+	c.registrar = nil
+	c.mtx.Unlock()
+	if registrar != nil {
+		registrar.Deregister()
+	}
 	return nil
 }
 
 func (c *Client) Instancer(service string) kitsd.Instancer {
-	if c == nil {
+	service = strings.Trim(strings.TrimSpace(service), "/")
+	if c == nil || c.client == nil || service == "" {
 		return nil
 	}
 	instancer, err := std.NewInstancer(c.client, "/"+service+"/", c.logger)
 	if err != nil {
-		panic(err)
+		_ = c.logger.Log("msg", "create etcd instancer failed", "service", service, "err", err)
+		return nil
 	}
 	return instancer
+}
+
+func newService(rawURL, name string) (std.Service, error) {
+	name = strings.Trim(strings.TrimSpace(name), "/")
+	if name == "" {
+		return std.Service{}, errors.New("sd/etcdv3: service name is required")
+	}
+
+	value := strings.TrimSpace(rawURL)
+	if value == "" {
+		return std.Service{}, errors.New("sd/etcdv3: instance url is required")
+	}
+
+	key, err := serviceKey(value, name)
+	if err != nil {
+		return std.Service{}, err
+	}
+	return std.Service{
+		Key:   key,
+		Value: value,
+	}, nil
+}
+
+func serviceKey(value, name string) (string, error) {
+	parseValue := value
+	if !strings.Contains(parseValue, "://") {
+		parseValue = "sd://" + parseValue
+	}
+	u, err := url.Parse(parseValue)
+	if err != nil {
+		return "", fmt.Errorf("sd/etcdv3: parse instance url: %w", err)
+	}
+	host := strings.TrimSpace(u.Host)
+	if host == "" {
+		return "", fmt.Errorf("sd/etcdv3: invalid instance url %q", value)
+	}
+	return "/" + name + "/" + host, nil
 }

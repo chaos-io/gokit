@@ -68,42 +68,32 @@ func RetryWithCallback(timeout time.Duration, b Balancer, cb Callback) endpoint.
 	if cb == nil {
 		cb = alwaysRetry
 	}
-	if b == nil {
-		panic("nil Balancer")
-	}
 
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
+		if b == nil {
+			return nil, ErrNilBalancer
+		}
+
 		var (
-			newctx, cancel = context.WithTimeout(ctx, timeout)
-			responses      = make(chan interface{}, 1)
-			errs           = make(chan error, 1)
-			final          RetryError
+			newctx = ctx
+			cancel context.CancelFunc
+			final  RetryError
 		)
-		defer cancel()
+		if timeout > 0 {
+			newctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
 
 		for i := 1; ; i++ {
-			go func() {
-				e, err := b.Endpoint()
-				if err != nil {
-					errs <- err
-					return
-				}
-				response, err := e(newctx, request)
-				if err != nil {
-					errs <- err
-					return
-				}
-				responses <- response
-			}()
-
-			select {
-			case <-newctx.Done():
+			if err := newctx.Err(); err != nil {
 				return nil, newctx.Err()
+			}
 
-			case response := <-responses:
-				return response, nil
-
-			case err := <-errs:
+			e, err := b.Endpoint()
+			if err == nil {
+				response, err = invoke(newctx, e, request)
+			}
+			if err != nil {
 				final.RawErrors = append(final.RawErrors, err)
 
 				/*
@@ -156,14 +146,34 @@ func RetryWithCallback(timeout time.Duration, b Balancer, cb Callback) endpoint.
 					err = replacement
 				}
 				if !keepTrying {
-					fmt.Printf("not trying\n")
 					final.Final = err
 					return nil, final
 				}
 
-				fmt.Printf("keep trying\n")
 				continue
 			}
+
+			return response, nil
 		}
+	}
+}
+
+func invoke(ctx context.Context, e endpoint.Endpoint, request interface{}) (interface{}, error) {
+	type result struct {
+		response interface{}
+		err      error
+	}
+
+	done := make(chan result, 1)
+	go func() {
+		response, err := e(ctx, request)
+		done <- result{response: response, err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r := <-done:
+		return r.response, r.err
 	}
 }
