@@ -4,8 +4,8 @@ go 1.24.12
 
 require (
 	github.com/cenk/backoff v2.2.1+incompatible
-	github.com/chaos-io/chaos v0.0.0-20260420025818-cc6c9370328f
-	github.com/chaos-io/core/go v0.0.0-20260418104954-551193c88639
+	github.com/chaos-io/chaos v0.0.0-20260603142549-8fcae853eff0
+	github.com/chaos-io/core/go v0.0.0-20260526111317-ffbe2502b241
 	github.com/go-kit/kit v0.13.0
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/json-iterator/go v1.1.12
@@ -37,6 +37,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect

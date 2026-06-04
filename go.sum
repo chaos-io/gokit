@@ -24,10 +24,10 @@ github.com/cenkalti/backoff/v5 v5.0.2 h1:rIfFVxEf1QsI7E1ZHfp/B4DF/6QBAUhmgkxc0H7
 github.com/cenkalti/backoff/v5 v5.0.2/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/chaos-io/chaos v0.0.0-20260420025818-cc6c9370328f h1:z0tbTxf6xCLZWBIplcpbaOEP6wYOacd078BuL2veDpk=
-github.com/chaos-io/chaos v0.0.0-20260420025818-cc6c9370328f/go.mod h1:YOYKaqVXsQeh2YJHgooUA/Hn7ulMoM3xgX+5nOunbqs=
-github.com/chaos-io/core/go v0.0.0-20260418104954-551193c88639 h1:mMznp83vEbAfGuPpvLy2zWegGAucvMk0Avx5v2K6DM4=
-github.com/chaos-io/core/go v0.0.0-20260418104954-551193c88639/go.mod h1:+Nx1HbTGj3AXHEuFv/MlZZ8xIFmQydEi5IWuqAUgKaU=
+github.com/chaos-io/chaos v0.0.0-20260603142549-8fcae853eff0 h1:44zG2wqpiK5tJdvbzjdcCF7hR6inVYBm4tWqYBAZy24=
+github.com/chaos-io/chaos v0.0.0-20260603142549-8fcae853eff0/go.mod h1:1LAH8I1GWFOIdLUNOPKXzRnq6DzGp9VWBkX4z+jkdoI=
+github.com/chaos-io/core/go v0.0.0-20260526111317-ffbe2502b241 h1:J1lbcU1yWTOp9j0QunYVwl4VFs7g1IqjSxKdusSMBcA=
+github.com/chaos-io/core/go v0.0.0-20260526111317-ffbe2502b241/go.mod h1:+Nx1HbTGj3AXHEuFv/MlZZ8xIFmQydEi5IWuqAUgKaU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403/go.mod h1:WmhPx2Nbnhtbo57+VJT5O0JRkEi1Wbu0z5j0R8u5Hbk=
@@ -77,6 +77,8 @@ github.com/go-playground/universal-translator v0.18.1/go.mod h1:xekY+UJKNuX9WP91
 github.com/go-playground/validator/v10 v10.28.0 h1:Q7ibns33JjyW48gHkuFT91qX48KG0ktULL6FgHdG688=
 github.com/go-playground/validator/v10 v10.28.0/go.mod h1:GoI6I1SjPBh9p7ykNE/yj3fFYbyDOpwMn5KXd+m2hUU=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
+github.com/go-viper/mapstructure/v2 v2.5.0 h1:vM5IJoUAy3d7zRSVtIwQgBj7BiWtMPfmPEgAXnvj1Ro=
+github.com/go-viper/mapstructure/v2 v2.5.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/gogo/protobuf v1.1.1/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7atdtwQ=
 github.com/gogo/protobuf v1.3.2 h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=
