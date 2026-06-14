@@ -16,3 +16,21 @@ func (r *EnvelopedResponse) ToErrorWrapped() *ErrorWrappedEnvelopedResponse {
 	}
 	return nil
 }
+
+func (r *EnvelopedResponse) CheckError(successCodes ...int32) error {
+	if r == nil || r.Error == nil || r.Error.Code == nil {
+		return nil
+	}
+
+	if len(successCodes) == 0 {
+		successCodes = []int32{200}
+	}
+
+	code := r.Error.Code.Code
+	for _, successCode := range successCodes {
+		if code == successCode {
+			return nil
+		}
+	}
+	return r.Error
+}
