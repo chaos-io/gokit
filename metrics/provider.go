@@ -21,25 +21,42 @@ type Instrumentation struct {
 	grpc      *metricmw.GRPCServer
 	mu        sync.Mutex
 	clients   map[string]*metricmw.HTTPClient
+	databases map[string]struct{}
+}
+
+func Disabled() *Instrumentation {
+	return newInstrumentation(false, "")
 }
 
 func New(service string) (*Instrumentation, error) {
-	cfg := NewConfig("metrics")
-	enabled, namespace := false, service
-	if cfg != nil {
-		enabled = cfg.Enabled()
-		namespace = cfg.Project
-		if cfg.Department != "" {
-			namespace = cfg.Department + "_" + cfg.Project
-		}
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, err
 	}
+
+	namespace := cfg.Project
+	if namespace == "" {
+		namespace = service
+	}
+
+	if cfg.Department != "" {
+		namespace = cfg.Department + "_" + namespace
+	}
+
+	return newInstrumentation(cfg.Enable, namespace), nil
+}
+
+func newInstrumentation(enabled bool, namespace string) *Instrumentation {
 	registry := prometheus.NewRegistry()
 	m := &Instrumentation{
-		enabled: enabled, namespace: namespace, registry: registry,
-		clients: make(map[string]*metricmw.HTTPClient),
+		enabled:   enabled,
+		namespace: namespace,
+		registry:  registry,
+		clients:   make(map[string]*metricmw.HTTPClient),
+		databases: make(map[string]struct{}),
 	}
 	if !enabled {
-		return m, nil
+		return m
 	}
 	registry.MustRegister(
 		collectors.NewGoCollector(),
@@ -47,7 +64,7 @@ func New(service string) (*Instrumentation, error) {
 	)
 	m.http = metricmw.NewHTTPServer(registry, namespace)
 	m.grpc = metricmw.NewGRPCServer(registry, namespace)
-	return m, nil
+	return m
 }
 
 func (m *Instrumentation) Handler() http.Handler {
@@ -73,7 +90,7 @@ func (m *Instrumentation) GRPCUnaryInterceptor() grpc.UnaryServerInterceptor {
 	return m.grpc.UnaryInterceptor()
 }
 
-func (m *Instrumentation) HTTPTransport(name string, next http.RoundTripper) http.RoundTripper {
+func (m *Instrumentation) HTTPTransport(name, target string, next http.RoundTripper) http.RoundTripper {
 	if m == nil || !m.enabled {
 		if next == nil {
 			return http.DefaultTransport
@@ -81,17 +98,25 @@ func (m *Instrumentation) HTTPTransport(name string, next http.RoundTripper) htt
 		return next
 	}
 	m.mu.Lock()
-	client := m.clients[name]
+	key := name + "\x00" + target
+	client := m.clients[key]
 	if client == nil {
-		client = metricmw.NewHTTPClient(m.registry, m.namespace, name)
-		m.clients[name] = client
+		client = metricmw.NewHTTPClient(m.registry, m.namespace, name, target)
+		m.clients[key] = client
 	}
 	m.mu.Unlock()
 	return client.Transport(next)
 }
 
 func (m *Instrumentation) RegisterDB(name string, db *sql.DB) {
-	if m != nil && m.enabled && db != nil {
-		m.registry.MustRegister(collectors.NewDBStatsCollector(db, name))
+	if m == nil || !m.enabled || db == nil {
+		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.databases[name]; exists {
+		return
+	}
+	m.registry.MustRegister(collectors.NewDBStatsCollector(db, name))
+	m.databases[name] = struct{}{}
 }

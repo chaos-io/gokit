@@ -39,17 +39,25 @@ func (m *HTTPServer) Middleware(resolve RouteResolver) func(http.Handler) http.H
 			started := time.Now()
 			writer := newResponseWriter(w)
 			m.inflight.WithLabelValues(r.Method).Inc()
-			defer m.inflight.WithLabelValues(r.Method).Dec()
-			next.ServeHTTP(writer, r)
-
-			route := "unknown"
-			if resolve != nil {
-				if value := resolve(r); value != "" {
-					route = value
+			defer func() {
+				m.inflight.WithLabelValues(r.Method).Dec()
+				route := "unknown"
+				if resolve != nil {
+					if value := resolve(r); value != "" {
+						route = value
+					}
 				}
-			}
-			m.requests.WithLabelValues(r.Method, route, strconv.Itoa(writer.StatusCode()/100)+"xx").Inc()
-			m.duration.WithLabelValues(r.Method, route).Observe(time.Since(started).Seconds())
+				status := writer.StatusCode()
+				if recovered := recover(); recovered != nil {
+					status = http.StatusInternalServerError
+					m.requests.WithLabelValues(r.Method, route, "5xx").Inc()
+					m.duration.WithLabelValues(r.Method, route).Observe(time.Since(started).Seconds())
+					panic(recovered)
+				}
+				m.requests.WithLabelValues(r.Method, route, strconv.Itoa(status/100)+"xx").Inc()
+				m.duration.WithLabelValues(r.Method, route).Observe(time.Since(started).Seconds())
+			}()
+			next.ServeHTTP(writer, r)
 		})
 	}
 }

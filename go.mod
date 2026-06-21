@@ -6,6 +6,7 @@ require (
 	github.com/cenk/backoff v2.2.1+incompatible
 	github.com/chaos-io/chaos v0.0.0-20260603142549-8fcae853eff0
 	github.com/chaos-io/core/go v0.0.0-20260526111317-ffbe2502b241
+	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-kit/kit v0.13.0
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/json-iterator/go v1.1.12

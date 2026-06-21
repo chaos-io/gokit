@@ -13,16 +13,18 @@ type HTTPClient struct {
 	inflight *prometheus.GaugeVec
 }
 
-func NewHTTPClient(registerer prometheus.Registerer, namespace, name string) *HTTPClient {
-	registerer = prometheus.WrapRegistererWith(prometheus.Labels{"client": name}, registerer)
+func NewHTTPClient(registerer prometheus.Registerer, namespace, name, target string) *HTTPClient {
+	registerer = prometheus.WrapRegistererWith(prometheus.Labels{
+		"client": name, "target": target,
+	}, registerer)
 	m := &HTTPClient{
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace, Name: "http_client_requests_total", Help: "Outbound HTTP requests completed.",
-		}, []string{"host", "method", "result"}),
+		}, []string{"method", "result"}),
 		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: namespace, Name: "http_client_request_duration_seconds",
 			Help: "Outbound HTTP request duration.", Buckets: defaultBuckets,
-		}, []string{"host", "method"}),
+		}, []string{"method"}),
 		inflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace, Name: "http_client_requests_in_flight", Help: "Outbound HTTP requests in flight.",
 		}, nil),
@@ -42,10 +44,10 @@ func (m *HTTPClient) Transport(next http.RoundTripper) http.RoundTripper {
 
 		response, err := next.RoundTrip(req)
 		m.requests.WithLabelValues(
-			req.URL.Hostname(), req.Method, httpResult(req.Context(), response, err),
+			req.Method, httpResult(req.Context(), response, err),
 		).Inc()
 		m.duration.WithLabelValues(
-			req.URL.Hostname(), req.Method,
+			req.Method,
 		).Observe(time.Since(started).Seconds())
 		return response, err
 	})
