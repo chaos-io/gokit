@@ -94,3 +94,26 @@ func getStatus(err error) string {
 	}
 	return ret
 }
+
+type APIObserver interface {
+	Observe(method, layer string, err error, seconds float64)
+}
+
+type APIObserverFunc func(method, layer string, err error, seconds float64)
+
+func (f APIObserverFunc) Observe(method, layer string, err error, seconds float64) {
+	f(method, layer, err, seconds)
+}
+
+func InstrumentingAPI(method, layer string, observer APIObserver) endpoint.Middleware {
+	return func(next endpoint.Endpoint) endpoint.Endpoint {
+		return func(ctx context.Context, request interface{}) (response interface{}, err error) {
+			defer func(begin time.Time) {
+				if observer != nil {
+					observer.Observe(method, layer, err, time.Since(begin).Seconds())
+				}
+			}(time.Now())
+			return next(ctx, request)
+		}
+	}
+}
