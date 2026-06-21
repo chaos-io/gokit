@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"sync"
 
@@ -21,7 +20,6 @@ type Instrumentation struct {
 	grpc      *metricmw.GRPCServer
 	mu        sync.Mutex
 	clients   map[string]*metricmw.HTTPClient
-	databases map[string]struct{}
 }
 
 func Disabled() *Instrumentation {
@@ -53,7 +51,6 @@ func newInstrumentation(enabled bool, namespace string) *Instrumentation {
 		namespace: namespace,
 		registry:  registry,
 		clients:   make(map[string]*metricmw.HTTPClient),
-		databases: make(map[string]struct{}),
 	}
 	if !enabled {
 		return m
@@ -106,17 +103,4 @@ func (m *Instrumentation) HTTPTransport(name, target string, next http.RoundTrip
 	}
 	m.mu.Unlock()
 	return client.Transport(next)
-}
-
-func (m *Instrumentation) RegisterDB(name string, db *sql.DB) {
-	if m == nil || !m.enabled || db == nil {
-		return
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, exists := m.databases[name]; exists {
-		return
-	}
-	m.registry.MustRegister(collectors.NewDBStatsCollector(db, name))
-	m.databases[name] = struct{}{}
 }
