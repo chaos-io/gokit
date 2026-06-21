@@ -49,6 +49,18 @@ func TestInstrumentationNormalizesNamespace(t *testing.T) {
 	}
 }
 
+func TestMetricNamespaceUsesConfiguredOverride(t *testing.T) {
+	if got := metricNamespace(Config{Namespace: "shared-api"}, "mailgate"); got != "shared-api" {
+		t.Fatalf("namespace = %q, want shared-api", got)
+	}
+}
+
+func TestMetricNamespaceFallsBackToServiceName(t *testing.T) {
+	if got := metricNamespace(Config{}, "mailgate"); got != "mailgate" {
+		t.Fatalf("namespace = %q, want mailgate", got)
+	}
+}
+
 func TestHTTPTransportReusesCollector(t *testing.T) {
 	instrumentation := newInstrumentation(true, "test")
 	_ = instrumentation.HTTPTransport("registration", "provider", nil)

@@ -32,16 +32,14 @@ func New(service string) (*Instrumentation, error) {
 		return nil, err
 	}
 
-	namespace := cfg.Project
-	if namespace == "" {
-		namespace = service
-	}
+	return newInstrumentation(cfg.Enable, metricNamespace(*cfg, service)), nil
+}
 
-	if cfg.Department != "" {
-		namespace = cfg.Department + "_" + namespace
+func metricNamespace(cfg Config, service string) string {
+	if cfg.Namespace != "" {
+		return cfg.Namespace
 	}
-
-	return newInstrumentation(cfg.Enable, namespace), nil
+	return service
 }
 
 func newInstrumentation(enabled bool, namespace string) *Instrumentation {
