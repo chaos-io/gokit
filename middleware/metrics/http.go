@@ -10,6 +10,8 @@ import (
 
 type RouteResolver func(*http.Request) string
 
+type HTTPMiddleware func(RouteResolver) func(http.Handler) http.Handler
+
 type HTTPServer struct {
 	requests *prometheus.CounterVec
 	duration *prometheus.HistogramVec

@@ -45,6 +45,7 @@ func New(service string) (*Instrumentation, error) {
 }
 
 func newInstrumentation(enabled bool, namespace string) *Instrumentation {
+	namespace = normalizeNamespace(namespace)
 	registry := prometheus.NewRegistry()
 	m := &Instrumentation{
 		enabled:   enabled,

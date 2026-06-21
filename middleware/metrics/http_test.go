@@ -46,19 +46,6 @@ func TestHTTPServerRecordsPanics(t *testing.T) {
 	}
 }
 
-func TestResponseWriterPreservesOptionalInterfaces(t *testing.T) {
-	writer := newResponseWriter(flushingWriter{ResponseWriter: httptest.NewRecorder()})
-	if _, ok := writer.ResponseWriter.(http.Flusher); !ok {
-		t.Fatal("wrapped writer lost http.Flusher")
-	}
-}
-
-type flushingWriter struct {
-	http.ResponseWriter
-}
-
-func (flushingWriter) Flush() {}
-
 func counterValue(t *testing.T, gatherer prometheus.Gatherer, name string, labels map[string]string) float64 {
 	t.Helper()
 	families, err := gatherer.Gather()

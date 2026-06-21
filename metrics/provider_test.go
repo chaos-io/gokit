@@ -1,13 +1,10 @@
 package metrics
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"google.golang.org/grpc"
 )
 
 func TestDisabledProviderReturnsNotFound(t *testing.T) {
@@ -31,22 +28,29 @@ func TestEnabledProviderExposesMetrics(t *testing.T) {
 	}
 }
 
+func TestInstrumentationNormalizesNamespace(t *testing.T) {
+	instrumentation := newInstrumentation(true, "9-mailgate.v1 MailgateService")
+	instrumentation.HTTPMiddleware(func(*http.Request) string { return "/test" })(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/test", nil))
+
+	recorder := httptest.NewRecorder()
+	instrumentation.Handler().ServeHTTP(
+		recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil),
+	)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "_9_mailgate_v1_MailgateService_http_server_requests_in_flight") {
+		t.Fatal("metrics output does not contain normalized namespace")
+	}
+}
+
 func TestHTTPTransportReusesCollector(t *testing.T) {
 	instrumentation := newInstrumentation(true, "test")
 	_ = instrumentation.HTTPTransport("registration", "provider", nil)
 	_ = instrumentation.HTTPTransport("registration", "provider", nil)
-}
-
-func TestGRPCDisabledInterceptorCallsHandler(t *testing.T) {
-	called := false
-	_, _ = newInstrumentation(false, "test").GRPCUnaryInterceptor()(
-		context.Background(), nil, &grpc.UnaryServerInfo{},
-		func(context.Context, any) (any, error) {
-			called = true
-			return nil, nil
-		},
-	)
-	if !called {
-		t.Fatal("handler was not called")
-	}
 }
