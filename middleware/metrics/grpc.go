@@ -29,7 +29,9 @@ func NewGRPCServer(registerer prometheus.Registerer, namespace string) *GRPCServ
 			Namespace: namespace, Name: "grpc_server_requests_in_flight", Help: "gRPC requests in flight.",
 		}, []string{"service", "method"}),
 	}
-	registerer.MustRegister(m.requests, m.duration, m.inflight)
+	m.requests = registerOrReuse(registerer, m.requests)
+	m.duration = registerOrReuse(registerer, m.duration)
+	m.inflight = registerOrReuse(registerer, m.inflight)
 	return m
 }
 

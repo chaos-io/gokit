@@ -103,7 +103,7 @@ func TestDisabledGRPCUnaryClientInterceptorIsTransparent(t *testing.T) {
 
 func TestInstrumentationUsesInjectedRegistry(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	instrumentation := NewWithRegistry("test", registry, registry)
+	instrumentation := NewWithRegistry("test", registry)
 	interceptor := instrumentation.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")
 	if err := interceptor(
 		context.Background(), "/mailgate.v1.MailgateService/CreateTask", nil, nil, nil,
@@ -116,5 +116,29 @@ func TestInstrumentationUsesInjectedRegistry(t *testing.T) {
 	instrumentation.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	if !strings.Contains(recorder.Body.String(), `test_grpc_client_requests_total`) {
 		t.Fatal("injected registry does not expose client metrics")
+	}
+}
+
+func TestInstrumentationReusesCollectorsInInjectedRegistry(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	first := NewWithRegistry("test", registry)
+	second := NewWithRegistry("test", registry)
+
+	_ = first.GRPCUnaryInterceptor()
+	_ = second.GRPCUnaryInterceptor()
+	_ = first.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")
+	_ = second.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")
+}
+
+func TestInjectedRegistryCreatesServerCollectorsLazily(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	instrumentation := NewWithRegistry("test", registry)
+	_ = instrumentation.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")
+
+	recorder := httptest.NewRecorder()
+	instrumentation.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := recorder.Body.String()
+	if strings.Contains(body, "test_http_server_") || strings.Contains(body, "test_grpc_server_") {
+		t.Fatal("client-only instrumentation registered server collectors")
 	}
 }

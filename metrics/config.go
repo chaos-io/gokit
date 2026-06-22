@@ -3,7 +3,7 @@ package metrics
 import "github.com/chaos-io/chaos/config"
 
 type Config struct {
-	Enable    bool   `json:"enable" yaml:"enable" default:"true"`
+	Enable    bool   `json:"enable" yaml:"enable" default:"false"`
 	Namespace string `json:"namespace" yaml:"namespace"`
 }
 

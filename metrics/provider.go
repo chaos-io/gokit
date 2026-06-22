@@ -15,8 +15,7 @@ import (
 type Instrumentation struct {
 	enabled     bool
 	namespace   string
-	registerer  prometheus.Registerer
-	gatherer    prometheus.Gatherer
+	registry    *prometheus.Registry
 	http        *metricmw.HTTPServer
 	grpc        *metricmw.GRPCServer
 	mu          sync.Mutex
@@ -45,70 +44,56 @@ func metricNamespace(cfg Config, service string) string {
 }
 
 func newInstrumentation(enabled bool, namespace string) *Instrumentation {
-	namespace = normalizeNamespace(namespace)
 	registry := prometheus.NewRegistry()
-	return newInstrumentationWithRegistry(enabled, namespace, registry, registry, true)
+	m := newInstrumentationWithRegistry(enabled, namespace, registry)
+	if enabled {
+		registry.MustRegister(
+			collectors.NewGoCollector(),
+			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		)
+	}
+	return m
 }
 
-func NewWithRegistry(
-	namespace string,
-	registerer prometheus.Registerer,
-	gatherer prometheus.Gatherer,
-) *Instrumentation {
-	if registerer == nil {
-		registerer = prometheus.NewRegistry()
+func NewWithRegistry(namespace string, registry *prometheus.Registry) *Instrumentation {
+	if registry == nil {
+		registry = prometheus.NewRegistry()
 	}
-	if gatherer == nil {
-		if value, ok := registerer.(prometheus.Gatherer); ok {
-			gatherer = value
-		} else {
-			gatherer = prometheus.DefaultGatherer
-		}
-	}
-	return newInstrumentationWithRegistry(true, normalizeNamespace(namespace), registerer, gatherer, false)
+	return newInstrumentationWithRegistry(true, namespace, registry)
 }
 
 func newInstrumentationWithRegistry(
 	enabled bool,
 	namespace string,
-	registerer prometheus.Registerer,
-	gatherer prometheus.Gatherer,
-	registerRuntime bool,
+	registry *prometheus.Registry,
 ) *Instrumentation {
-	m := &Instrumentation{
+	return &Instrumentation{
 		enabled:     enabled,
-		namespace:   namespace,
-		registerer:  registerer,
-		gatherer:    gatherer,
+		namespace:   normalizeNamespace(namespace),
+		registry:    registry,
 		httpClients: make(map[string]*metricmw.HTTPClient),
 		grpcClients: make(map[string]*metricmw.GRPCClient),
 	}
-	if !enabled {
-		return m
-	}
-	if registerRuntime {
-		registerer.MustRegister(
-			collectors.NewGoCollector(),
-			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		)
-	}
-	m.http = metricmw.NewHTTPServer(registerer, namespace)
-	m.grpc = metricmw.NewGRPCServer(registerer, namespace)
-	return m
 }
 
 func (m *Instrumentation) Handler() http.Handler {
 	if m == nil || !m.enabled {
 		return http.NotFoundHandler()
 	}
-	return promhttp.HandlerFor(m.gatherer, promhttp.HandlerOpts{})
+	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
 }
 
 func (m *Instrumentation) HTTPMiddleware(resolve metricmw.RouteResolver) func(http.Handler) http.Handler {
 	if m == nil || !m.enabled {
 		return func(next http.Handler) http.Handler { return next }
 	}
-	return m.http.Middleware(resolve)
+	m.mu.Lock()
+	if m.http == nil {
+		m.http = metricmw.NewHTTPServer(m.registry, m.namespace)
+	}
+	server := m.http
+	m.mu.Unlock()
+	return server.Middleware(resolve)
 }
 
 func (m *Instrumentation) GRPCUnaryInterceptor() grpc.UnaryServerInterceptor {
@@ -117,7 +102,13 @@ func (m *Instrumentation) GRPCUnaryInterceptor() grpc.UnaryServerInterceptor {
 			return handler(ctx, req)
 		}
 	}
-	return m.grpc.UnaryInterceptor()
+	m.mu.Lock()
+	if m.grpc == nil {
+		m.grpc = metricmw.NewGRPCServer(m.registry, m.namespace)
+	}
+	server := m.grpc
+	m.mu.Unlock()
+	return server.UnaryInterceptor()
 }
 
 func (m *Instrumentation) HTTPTransport(name, target string, next http.RoundTripper) http.RoundTripper {
@@ -131,7 +122,7 @@ func (m *Instrumentation) HTTPTransport(name, target string, next http.RoundTrip
 	key := name + "\x00" + target
 	client := m.httpClients[key]
 	if client == nil {
-		client = metricmw.NewHTTPClient(m.registerer, m.namespace, name, target)
+		client = metricmw.NewHTTPClient(m.registry, m.namespace, name, target)
 		m.httpClients[key] = client
 	}
 	m.mu.Unlock()
@@ -155,7 +146,7 @@ func (m *Instrumentation) GRPCUnaryClientInterceptor(name, target string) grpc.U
 	key := name + "\x00" + target
 	client := m.grpcClients[key]
 	if client == nil {
-		client = metricmw.NewGRPCClient(m.registerer, m.namespace, name, target)
+		client = metricmw.NewGRPCClient(m.registry, m.namespace, name, target)
 		m.grpcClients[key] = client
 	}
 	m.mu.Unlock()

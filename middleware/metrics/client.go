@@ -19,22 +19,26 @@ type HTTPClient struct {
 }
 
 func NewHTTPClient(registerer prometheus.Registerer, namespace, name, target string) *HTTPClient {
-	registerer = prometheus.WrapRegistererWith(prometheus.Labels{
+	constLabels := prometheus.Labels{
 		"client": name, "target": target,
-	}, registerer)
+	}
 	m := &HTTPClient{
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace, Name: "http_client_requests_total", Help: "Outbound HTTP requests completed.",
+			ConstLabels: constLabels,
 		}, []string{"method", "result"}),
 		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: namespace, Name: "http_client_request_duration_seconds",
-			Help: "Outbound HTTP request duration.", Buckets: defaultBuckets,
+			Help: "Outbound HTTP request duration.", Buckets: defaultBuckets, ConstLabels: constLabels,
 		}, []string{"method"}),
 		inflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace, Name: "http_client_requests_in_flight", Help: "Outbound HTTP requests in flight.",
+			ConstLabels: constLabels,
 		}, nil),
 	}
-	registerer.MustRegister(m.requests, m.duration, m.inflight)
+	m.requests = registerOrReuse(registerer, m.requests)
+	m.duration = registerOrReuse(registerer, m.duration)
+	m.inflight = registerOrReuse(registerer, m.inflight)
 	return m
 }
 
@@ -71,22 +75,26 @@ type GRPCClient struct {
 }
 
 func NewGRPCClient(registerer prometheus.Registerer, namespace, name, target string) *GRPCClient {
-	registerer = prometheus.WrapRegistererWith(prometheus.Labels{
+	constLabels := prometheus.Labels{
 		"client": name, "target": target,
-	}, registerer)
+	}
 	m := &GRPCClient{
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace, Name: "grpc_client_requests_total", Help: "Outbound gRPC requests completed.",
+			ConstLabels: constLabels,
 		}, []string{"service", "method", "code"}),
 		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: namespace, Name: "grpc_client_request_duration_seconds",
-			Help: "Outbound gRPC request duration.", Buckets: defaultBuckets,
+			Help: "Outbound gRPC request duration.", Buckets: defaultBuckets, ConstLabels: constLabels,
 		}, []string{"service", "method"}),
 		inflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace, Name: "grpc_client_requests_in_flight", Help: "Outbound gRPC requests in flight.",
+			ConstLabels: constLabels,
 		}, []string{"service", "method"}),
 	}
-	registerer.MustRegister(m.requests, m.duration, m.inflight)
+	m.requests = registerOrReuse(registerer, m.requests)
+	m.duration = registerOrReuse(registerer, m.duration)
+	m.inflight = registerOrReuse(registerer, m.inflight)
 	return m
 }
 

@@ -31,7 +31,9 @@ func NewHTTPServer(registerer prometheus.Registerer, namespace string) *HTTPServ
 			Namespace: namespace, Name: "http_server_requests_in_flight", Help: "HTTP requests in flight.",
 		}, []string{"method"}),
 	}
-	registerer.MustRegister(m.requests, m.duration, m.inflight)
+	m.requests = registerOrReuse(registerer, m.requests)
+	m.duration = registerOrReuse(registerer, m.duration)
+	m.inflight = registerOrReuse(registerer, m.inflight)
 	return m
 }
 
