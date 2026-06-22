@@ -13,13 +13,15 @@ import (
 )
 
 type Instrumentation struct {
-	enabled   bool
-	namespace string
-	registry  *prometheus.Registry
-	http      *metricmw.HTTPServer
-	grpc      *metricmw.GRPCServer
-	mu        sync.Mutex
-	clients   map[string]*metricmw.HTTPClient
+	enabled     bool
+	namespace   string
+	registerer  prometheus.Registerer
+	gatherer    prometheus.Gatherer
+	http        *metricmw.HTTPServer
+	grpc        *metricmw.GRPCServer
+	mu          sync.Mutex
+	httpClients map[string]*metricmw.HTTPClient
+	grpcClients map[string]*metricmw.GRPCClient
 }
 
 func Disabled() *Instrumentation {
@@ -45,21 +47,53 @@ func metricNamespace(cfg Config, service string) string {
 func newInstrumentation(enabled bool, namespace string) *Instrumentation {
 	namespace = normalizeNamespace(namespace)
 	registry := prometheus.NewRegistry()
+	return newInstrumentationWithRegistry(enabled, namespace, registry, registry, true)
+}
+
+func NewWithRegistry(
+	namespace string,
+	registerer prometheus.Registerer,
+	gatherer prometheus.Gatherer,
+) *Instrumentation {
+	if registerer == nil {
+		registerer = prometheus.NewRegistry()
+	}
+	if gatherer == nil {
+		if value, ok := registerer.(prometheus.Gatherer); ok {
+			gatherer = value
+		} else {
+			gatherer = prometheus.DefaultGatherer
+		}
+	}
+	return newInstrumentationWithRegistry(true, normalizeNamespace(namespace), registerer, gatherer, false)
+}
+
+func newInstrumentationWithRegistry(
+	enabled bool,
+	namespace string,
+	registerer prometheus.Registerer,
+	gatherer prometheus.Gatherer,
+	registerRuntime bool,
+) *Instrumentation {
 	m := &Instrumentation{
-		enabled:   enabled,
-		namespace: namespace,
-		registry:  registry,
-		clients:   make(map[string]*metricmw.HTTPClient),
+		enabled:     enabled,
+		namespace:   namespace,
+		registerer:  registerer,
+		gatherer:    gatherer,
+		httpClients: make(map[string]*metricmw.HTTPClient),
+		grpcClients: make(map[string]*metricmw.GRPCClient),
 	}
 	if !enabled {
 		return m
 	}
-	registry.MustRegister(
-		collectors.NewGoCollector(),
-		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-	)
-	m.http = metricmw.NewHTTPServer(registry, namespace)
-	m.grpc = metricmw.NewGRPCServer(registry, namespace)
+	if registerRuntime {
+		registerer.MustRegister(
+			collectors.NewGoCollector(),
+			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		)
+	}
+	m.http = metricmw.NewHTTPServer(registerer, namespace)
+	m.grpc = metricmw.NewGRPCServer(registerer, namespace)
 	return m
 }
 
@@ -67,7 +101,7 @@ func (m *Instrumentation) Handler() http.Handler {
 	if m == nil || !m.enabled {
 		return http.NotFoundHandler()
 	}
-	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
+	return promhttp.HandlerFor(m.gatherer, promhttp.HandlerOpts{})
 }
 
 func (m *Instrumentation) HTTPMiddleware(resolve metricmw.RouteResolver) func(http.Handler) http.Handler {
@@ -95,11 +129,35 @@ func (m *Instrumentation) HTTPTransport(name, target string, next http.RoundTrip
 	}
 	m.mu.Lock()
 	key := name + "\x00" + target
-	client := m.clients[key]
+	client := m.httpClients[key]
 	if client == nil {
-		client = metricmw.NewHTTPClient(m.registry, m.namespace, name, target)
-		m.clients[key] = client
+		client = metricmw.NewHTTPClient(m.registerer, m.namespace, name, target)
+		m.httpClients[key] = client
 	}
 	m.mu.Unlock()
 	return client.Transport(next)
+}
+
+func (m *Instrumentation) GRPCUnaryClientInterceptor(name, target string) grpc.UnaryClientInterceptor {
+	if m == nil || !m.enabled {
+		return func(
+			ctx context.Context,
+			method string,
+			req, reply any,
+			cc *grpc.ClientConn,
+			invoker grpc.UnaryInvoker,
+			opts ...grpc.CallOption,
+		) error {
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}
+	}
+	m.mu.Lock()
+	key := name + "\x00" + target
+	client := m.grpcClients[key]
+	if client == nil {
+		client = metricmw.NewGRPCClient(m.registerer, m.namespace, name, target)
+		m.grpcClients[key] = client
+	}
+	m.mu.Unlock()
+	return client.UnaryInterceptor()
 }

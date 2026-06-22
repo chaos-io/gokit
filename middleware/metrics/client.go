@@ -1,10 +1,15 @@
 package metrics
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type HTTPClient struct {
@@ -57,4 +62,58 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
+}
+
+type GRPCClient struct {
+	requests *prometheus.CounterVec
+	duration *prometheus.HistogramVec
+	inflight *prometheus.GaugeVec
+}
+
+func NewGRPCClient(registerer prometheus.Registerer, namespace, name, target string) *GRPCClient {
+	registerer = prometheus.WrapRegistererWith(prometheus.Labels{
+		"client": name, "target": target,
+	}, registerer)
+	m := &GRPCClient{
+		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace, Name: "grpc_client_requests_total", Help: "Outbound gRPC requests completed.",
+		}, []string{"service", "method", "code"}),
+		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: namespace, Name: "grpc_client_request_duration_seconds",
+			Help: "Outbound gRPC request duration.", Buckets: defaultBuckets,
+		}, []string{"service", "method"}),
+		inflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace, Name: "grpc_client_requests_in_flight", Help: "Outbound gRPC requests in flight.",
+		}, []string{"service", "method"}),
+	}
+	registerer.MustRegister(m.requests, m.duration, m.inflight)
+	return m
+}
+
+func (m *GRPCClient) UnaryInterceptor() grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply any,
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		service, methodName := splitMethod(method)
+		started := time.Now()
+		m.inflight.WithLabelValues(service, methodName).Inc()
+		defer m.inflight.WithLabelValues(service, methodName).Dec()
+
+		err := invoker(ctx, method, req, reply, cc, opts...)
+		m.requests.WithLabelValues(service, methodName, grpcCode(err).String()).Inc()
+		m.duration.WithLabelValues(service, methodName).Observe(time.Since(started).Seconds())
+		return err
+	}
+}
+
+func grpcCode(err error) codes.Code {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return status.FromContextError(err).Code()
+	}
+	return status.Code(err)
 }

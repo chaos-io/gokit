@@ -1,10 +1,14 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/grpc"
 )
 
 func TestDisabledProviderReturnsNotFound(t *testing.T) {
@@ -65,4 +69,52 @@ func TestHTTPTransportReusesCollector(t *testing.T) {
 	instrumentation := newInstrumentation(true, "test")
 	_ = instrumentation.HTTPTransport("registration", "provider", nil)
 	_ = instrumentation.HTTPTransport("registration", "provider", nil)
+}
+
+func TestGRPCUnaryClientInterceptorReusesCollector(t *testing.T) {
+	instrumentation := newInstrumentation(true, "test")
+	_ = instrumentation.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")
+	_ = instrumentation.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")
+}
+
+func TestDisabledGRPCUnaryClientInterceptorIsTransparent(t *testing.T) {
+	instrumentation := newInstrumentation(false, "test")
+	called := false
+	err := instrumentation.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")(
+		context.Background(), "/mailgate.v1.MailgateService/CreateTask", nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+			called = true
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("invoker was not called")
+	}
+
+	recorder := httptest.NewRecorder()
+	instrumentation.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if strings.Contains(recorder.Body.String(), "grpc_client_") {
+		t.Fatal("disabled instrumentation exposed client metrics")
+	}
+}
+
+func TestInstrumentationUsesInjectedRegistry(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	instrumentation := NewWithRegistry("test", registry, registry)
+	interceptor := instrumentation.GRPCUnaryClientInterceptor("mailgate-client", "mailgate.v1.MailgateService")
+	if err := interceptor(
+		context.Background(), "/mailgate.v1.MailgateService/CreateTask", nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error { return nil },
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	instrumentation.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(recorder.Body.String(), `test_grpc_client_requests_total`) {
+		t.Fatal("injected registry does not expose client metrics")
+	}
 }
