@@ -8,8 +8,12 @@ import (
 )
 
 type Config struct {
-	Enable   bool   `json:"enable" yaml:"enable" default:"false"`
-	Endpoint string `json:"endpoint" yaml:"endpoint" default:"localhost:4318"`
+	Enable            bool    `json:"enable" yaml:"enable" default:"false"`
+	Endpoint          string  `json:"endpoint" yaml:"endpoint" default:"localhost:4318"`
+	SampleRatio       float64 `json:"sampleRatio" yaml:"sampleRatio" default:"1"`
+	Environment       string  `json:"environment" yaml:"environment"`
+	ServiceVersion    string  `json:"serviceVersion" yaml:"serviceVersion"`
+	ServiceInstanceID string  `json:"serviceInstanceID" yaml:"serviceInstanceID"`
 }
 
 const DefaultOTLPEndpoint = "localhost:4318"

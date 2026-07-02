@@ -189,6 +189,59 @@ func TestNewWithDisabledConfigReturnsNoop(t *testing.T) {
 	}
 }
 
+func TestSamplerFromRatioUsesParentBasedTraceIDRatio(t *testing.T) {
+	dropRoot := samplerFromRatio(0).ShouldSample(traceSDK.SamplingParameters{
+		TraceID: trace.TraceID{0x01},
+	})
+	if dropRoot.Decision != traceSDK.Drop {
+		t.Fatalf("expected root span to drop, got %v", dropRoot.Decision)
+	}
+
+	sampleRoot := samplerFromRatio(1).ShouldSample(traceSDK.SamplingParameters{
+		TraceID: trace.TraceID{0xff},
+	})
+	if sampleRoot.Decision != traceSDK.RecordAndSample {
+		t.Fatalf("expected root span to sample, got %v", sampleRoot.Decision)
+	}
+
+	parentContext := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{0x01},
+		SpanID:     trace.SpanID{0x01},
+		TraceFlags: trace.FlagsSampled,
+		Remote:     true,
+	}))
+	sampledParent := samplerFromRatio(0).ShouldSample(traceSDK.SamplingParameters{
+		ParentContext: parentContext,
+		TraceID:       trace.TraceID{0xff},
+	})
+	if sampledParent.Decision != traceSDK.RecordAndSample {
+		t.Fatalf("expected sampled parent to sample child, got %v", sampledParent.Decision)
+	}
+}
+
+func TestSampleRatioDefaultsToOneForOldConfigs(t *testing.T) {
+	if got := sampleRatio(&Config{}); got != 1 {
+		t.Fatalf("expected default sample ratio 1, got %v", got)
+	}
+}
+
+func TestNewResourceIncludesDeploymentAttributes(t *testing.T) {
+	res, err := newResource(context.Background(), "svc", &Config{
+		Environment:       "prod",
+		ServiceVersion:    "v1.2.3",
+		ServiceInstanceID: "pod-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attrs := res.Attributes()
+	assertAttribute(t, attrs, "service.name", "svc")
+	assertAttribute(t, attrs, "deployment.environment", "prod")
+	assertAttribute(t, attrs, "service.version", "v1.2.3")
+	assertAttribute(t, attrs, "service.instance.id", "pod-1")
+}
+
 func runEndpoint(
 	t *testing.T,
 	middleware endpoint.Middleware,

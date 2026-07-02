@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	traceSDK "go.opentelemetry.io/otel/sdk/trace"
@@ -14,7 +15,15 @@ import (
 )
 
 func NewTracer(ctx context.Context, serviceName, otlpEndpoint string) (trace.Tracer, ShutdownFunc, error) {
-	provider, err := NewTraceProvider(ctx, serviceName, otlpEndpoint)
+	return NewTracerWithConfig(ctx, serviceName, &Config{
+		Enable:      true,
+		Endpoint:    otlpEndpoint,
+		SampleRatio: 1,
+	})
+}
+
+func NewTracerWithConfig(ctx context.Context, serviceName string, cfg *Config) (trace.Tracer, ShutdownFunc, error) {
+	provider, err := NewTraceProviderWithConfig(ctx, serviceName, cfg)
 	if err != nil {
 		return noopTracer(serviceName), NoopShutdown, err
 	}
@@ -25,7 +34,18 @@ func NewTracer(ctx context.Context, serviceName, otlpEndpoint string) (trace.Tra
 }
 
 func NewTraceProvider(ctx context.Context, serviceName, otlpEndpoint string) (*traceSDK.TracerProvider, error) {
-	endpoint := strings.TrimSpace(otlpEndpoint)
+	return NewTraceProviderWithConfig(ctx, serviceName, &Config{
+		Enable:      true,
+		Endpoint:    otlpEndpoint,
+		SampleRatio: 1,
+	})
+}
+
+func NewTraceProviderWithConfig(ctx context.Context, serviceName string, cfg *Config) (*traceSDK.TracerProvider, error) {
+	if cfg == nil {
+		cfg = &Config{SampleRatio: 1}
+	}
+	endpoint := strings.TrimSpace(cfg.Endpoint)
 	if endpoint == "" {
 		endpoint = DefaultOTLPEndpoint
 	}
@@ -42,16 +62,51 @@ func NewTraceProvider(ctx context.Context, serviceName, otlpEndpoint string) (*t
 		return nil, err
 	}
 
-	res, err := resource.New(ctx, resource.WithAttributes(semconv.ServiceName(serviceName)))
+	res, err := newResource(ctx, serviceName, cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	traceProvider := traceSDK.NewTracerProvider(
 		traceSDK.WithResource(res),
-		traceSDK.WithSampler(traceSDK.ParentBased(traceSDK.AlwaysSample())),
+		traceSDK.WithSampler(samplerFromRatio(sampleRatio(cfg))),
 		traceSDK.WithBatcher(exp, traceSDK.WithBatchTimeout(time.Second)),
 	)
 
 	return traceProvider, nil
+}
+
+func sampleRatio(cfg *Config) float64 {
+	if cfg == nil || cfg.SampleRatio == 0 {
+		return 1
+	}
+	return cfg.SampleRatio
+}
+
+func samplerFromRatio(ratio float64) traceSDK.Sampler {
+	if ratio <= 0 {
+		return traceSDK.ParentBased(traceSDK.NeverSample())
+	}
+	if ratio >= 1 {
+		return traceSDK.ParentBased(traceSDK.AlwaysSample())
+	}
+	return traceSDK.ParentBased(traceSDK.TraceIDRatioBased(ratio))
+}
+
+func newResource(ctx context.Context, serviceName string, cfg *Config) (*resource.Resource, error) {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceName(serviceName),
+	}
+	if cfg != nil {
+		if cfg.Environment != "" {
+			attrs = append(attrs, attribute.String("deployment.environment", cfg.Environment))
+		}
+		if cfg.ServiceVersion != "" {
+			attrs = append(attrs, attribute.String("service.version", cfg.ServiceVersion))
+		}
+		if cfg.ServiceInstanceID != "" {
+			attrs = append(attrs, attribute.String("service.instance.id", cfg.ServiceInstanceID))
+		}
+	}
+	return resource.New(ctx, resource.WithAttributes(attrs...))
 }

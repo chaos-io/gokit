@@ -17,7 +17,7 @@ func NewWith(ctx context.Context, name string, cfg *Config) (trace.Tracer, Shutd
 	}
 
 	if cfg.Enable {
-		return NewTracer(ctx, name, cfg.Endpoint)
+		return NewTracerWithConfig(ctx, name, cfg)
 	}
 
 	return noopTracer(name), NoopShutdown, nil
