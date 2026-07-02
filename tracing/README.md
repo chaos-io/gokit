@@ -54,6 +54,165 @@ tracer, shutdown, err := tracing.NewWith(ctx, "example.user.UserService", &traci
 
 `NewTracer` 和 `NewTraceProvider` 是更底层的辅助函数，适合只需要指定 OTLP endpoint 的调用方。应用代码通常优先使用 `New` 或 `NewWith`。
 
+## 搭建 otel-collector:4318
+
+`otel-collector:4318` 是服务访问 OpenTelemetry Collector 的 OTLP HTTP 接收地址。Collector 配置由 `receivers`、`processors`、`exporters` 和 `service.pipelines` 组成；只在 `receivers` 里声明组件不会生效，必须把它放进对应 pipeline。
+
+最小可用配置如下，适合本地验证。它接收 OTLP HTTP `4318` 和 OTLP gRPC `4317`，经过 `memory_limiter`、`batch` 后用 `debug` exporter 打印 trace：
+
+```yaml
+# otel-collector.yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+
+exporters:
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+```
+
+本地 Docker Compose：
+
+```yaml
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4318:4318" # OTLP HTTP，gokit/tracing 默认使用这个端口
+      - "4317:4317" # OTLP gRPC，给其他 SDK 或工具使用
+```
+
+服务侧配置：
+
+```yaml
+tracing:
+  enable: true
+  endpoint: otel-collector:4318
+  sampleRatio: 1
+  environment: dev
+  serviceVersion: v0.1.0
+  serviceInstanceID: local-1
+```
+
+如果应用和 Collector 不在同一个 Docker network，应用不能解析 `otel-collector`。这时本机进程使用 `localhost:4318`；容器内应用则把应用容器和 `otel-collector` 放到同一个 compose network。
+
+## Sidecar 使用方式
+
+Sidecar 模式是“每个业务 Pod 内同时运行业务容器和 Collector 容器”。业务容器把 trace 发给同 Pod 内的 Collector，所以 endpoint 写 `localhost:4318`。Collector 再把 trace 转发到集群内的 gateway Collector 或 tracing 后端。
+
+示例 ConfigMap：
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-otel-sidecar
+data:
+  otel-collector.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 127.0.0.1:4318
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 128
+        spike_limit_mib: 32
+      batch:
+        timeout: 1s
+        send_batch_size: 256
+
+    exporters:
+      otlphttp/gateway:
+        endpoint: http://otel-gateway.observability.svc.cluster.local:4318
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlphttp/gateway]
+```
+
+示例 Deployment 片段：
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: example/user-service:v1.2.3
+          env:
+            - name: SERVICE_VERSION
+              value: v1.2.3
+          ports:
+            - containerPort: 30101
+
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          args:
+            - --config=/etc/otelcol/config.yaml
+          ports:
+            - name: otlp-http
+              containerPort: 4318
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otelcol/config.yaml
+              subPath: otel-collector.yaml
+              readOnly: true
+
+      volumes:
+        - name: otel-config
+          configMap:
+            name: user-service-otel-sidecar
+```
+
+业务服务配置：
+
+```yaml
+tracing:
+  enable: true
+  endpoint: localhost:4318
+  sampleRatio: 0.05
+  environment: prod
+  serviceVersion: v1.2.3
+  serviceInstanceID: ${HOSTNAME}
+```
+
+Sidecar 的优点是业务进程只依赖本地 Collector，网络抖动和后端限流不会直接打到业务进程；不同服务也可以有不同采样、脱敏和路由策略。代价是每个 Pod 多一个容器，资源成本和配置发布复杂度更高。
+
+生产环境更常见的折中方式是 `app -> local sidecar/daemonset -> gateway collector -> tracing backend`。sidecar/daemonset 负责本地接收、batch、限流和短暂缓冲；gateway 负责统一鉴权、导出、跨集群路由和后端协议适配。
+
 ## 上下文传播
 
 HTTP 入站请求应在 endpoint 执行前提取 W3C TraceContext 和 Baggage：
