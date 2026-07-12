@@ -1,0 +1,119 @@
+package accesslog
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"go.opentelemetry.io/otel/trace"
+)
+
+func TestHTTPMiddlewareLogsStructuredServerError(t *testing.T) {
+	t.Parallel()
+
+	logger := &recordingLogger{}
+	middleware := HTTPMiddleware(Config{SampleEvery: 0}, WithLogFunc(logger.Log))
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("down"))
+	}))
+
+	r := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	r.RemoteAddr = "203.0.113.10:4321"
+	r.Header.Set("X-Request-ID", "req-http")
+	r = r.WithContext(contextWithTrace(r.Context()))
+	handler.ServeHTTP(httptest.NewRecorder(), r)
+
+	entry := logger.single(t)
+	if entry.Level != LevelError {
+		t.Fatalf("level = %v, want %v", entry.Level, LevelError)
+	}
+	assertField(t, entry.Fields, "protocol", "http")
+	assertField(t, entry.Fields, "method", http.MethodGet)
+	assertField(t, entry.Fields, "path", "/users/42")
+	assertField(t, entry.Fields, "status", http.StatusServiceUnavailable)
+	assertField(t, entry.Fields, "bytes", int64(4))
+	assertField(t, entry.Fields, "remote_ip", "203.0.113.10")
+	assertField(t, entry.Fields, "request_id", "req-http")
+	assertField(t, entry.Fields, "trace_id", testTraceID.String())
+	assertField(t, entry.Fields, "span_id", testSpanID.String())
+}
+
+func TestHTTPMiddlewareSkipsSuccessfulConfiguredPath(t *testing.T) {
+	t.Parallel()
+
+	logger := &recordingLogger{}
+	handler := HTTPMiddleware(Config{
+		SampleEvery: 1,
+		HTTP:        HTTPConfig{SkipPaths: []string{"/healthz"}},
+	}, WithLogFunc(logger.Log))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if got := logger.count(); got != 0 {
+		t.Fatalf("log count = %d, want 0", got)
+	}
+}
+
+func TestHTTPMiddlewareLogsSlowSuccessfulRequest(t *testing.T) {
+	t.Parallel()
+
+	logger := &recordingLogger{}
+	handler := HTTPMiddleware(Config{
+		SlowThreshold: time.Nanosecond,
+		SampleEvery:   0,
+	}, WithLogFunc(logger.Log))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/users", nil))
+	if entry := logger.single(t); entry.Level != LevelInfo {
+		t.Fatalf("level = %v, want %v", entry.Level, LevelInfo)
+	}
+}
+
+func TestHTTPMiddlewarePreservesFlusher(t *testing.T) {
+	t.Parallel()
+
+	writer := &flushingRecorder{ResponseRecorder: httptest.NewRecorder()}
+	handler := HTTPMiddleware(Config{SampleEvery: 0})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, ok := w.(http.Flusher); !ok {
+			t.Fatal("wrapped response writer does not preserve http.Flusher")
+		}
+	}))
+	handler.ServeHTTP(writer, httptest.NewRequest(http.MethodGet, "/", nil))
+}
+
+func TestHTTPMiddlewareLogsAndPropagatesPanic(t *testing.T) {
+	t.Parallel()
+
+	logger := &recordingLogger{}
+	handler := HTTPMiddleware(Config{SampleEvery: 0}, WithLogFunc(logger.Log))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	}))
+
+	defer func() {
+		if recovered := recover(); recovered != "boom" {
+			t.Fatalf("recovered = %v, want boom", recovered)
+		}
+		if entry := logger.single(t); entry.Level != LevelError {
+			t.Fatalf("level = %v, want %v", entry.Level, LevelError)
+		}
+	}()
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/panic", nil))
+}
+
+type flushingRecorder struct{ *httptest.ResponseRecorder }
+
+func (*flushingRecorder) Flush() {}
+
+var (
+	testTraceID = trace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	testSpanID  = trace.SpanID{1, 2, 3, 4, 5, 6, 7, 8}
+)
+
+func contextWithTrace(ctx context.Context) context.Context {
+	return trace.ContextWithSpanContext(ctx, trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: testTraceID,
+		SpanID:  testSpanID,
+	}))
+}
