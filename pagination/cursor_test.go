@@ -70,6 +70,30 @@ func TestNormalizePageSize(t *testing.T) {
 	}
 }
 
+func TestResolve(t *testing.T) {
+	codec, err := NewCursorCodec(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	binding, err := Binding("users", []int64{1, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := codec.EncodeOffset(12, binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	offset, size, gotBinding, err := Resolve(codec, token, 25, "users", []int64{1, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if offset != 12 || size != 25 || gotBinding != binding {
+		t.Fatalf("Resolve() = (%d, %d, %q), want (12, 25, %q)", offset, size, gotBinding, binding)
+	}
+}
+
 func TestPageImplementsPaginator(t *testing.T) {
 	page := Page[string]{Items: []string{"one"}, TotalCount: 1, NextPageToken: "next"}
 	var paginator Paginator = page

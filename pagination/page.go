@@ -21,6 +21,27 @@ func NormalizePageSize(pageSize int) (int, error) {
 	return pageSize, nil
 }
 
+// Resolve validates a list request and returns its cursor offset, normalized
+// page size, and binding for creating a subsequent page token.
+func Resolve(codec *CursorCodec, token string, pageSize int, namespace string, scope any) (int, int, string, error) {
+	binding, err := Binding(namespace, scope)
+	if err != nil {
+		return 0, 0, "", err
+	}
+
+	offset, err := codec.DecodeOffset(token, binding)
+	if err != nil {
+		return 0, 0, "", err
+	}
+
+	size, err := NormalizePageSize(pageSize)
+	if err != nil {
+		return 0, 0, "", err
+	}
+
+	return offset, size, binding, nil
+}
+
 // Page is a standard list result. It satisfies Paginator so transports can
 // consistently expose pagination metadata without knowing the concrete item type.
 type Page[T any] struct {
