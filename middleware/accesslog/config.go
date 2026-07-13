@@ -9,6 +9,7 @@ import (
 
 const configPath = "transport.accessLog"
 
+// Config controls access log filtering and sampling.
 type Config struct {
 	SlowThreshold time.Duration `json:"slowThreshold"`
 	SampleEvery   uint64        `json:"sampleEvery"`
@@ -16,14 +17,17 @@ type Config struct {
 	GRPC          GRPCConfig    `json:"grpc"`
 }
 
+// HTTPConfig contains HTTP-specific filters.
 type HTTPConfig struct {
 	SkipPaths []string `json:"skipPaths"`
 }
 
+// GRPCConfig contains gRPC-specific filters.
 type GRPCConfig struct {
 	SkipMethods []string `json:"skipMethods"`
 }
 
+// DefaultConfig returns production-safe access log defaults.
 func DefaultConfig() Config {
 	return Config{
 		SlowThreshold: 500 * time.Millisecond,
@@ -40,7 +44,8 @@ func DefaultConfig() Config {
 	}
 }
 
-func NewConfig() Config {
+// LoadConfig reads transport.accessLog over the defaults.
+func LoadConfig() Config {
 	cfg := DefaultConfig()
 	if err := config.ScanFrom(&cfg, configPath); err != nil {
 		logs.Warnw("failed to load access log config", "path", configPath, "error", err)

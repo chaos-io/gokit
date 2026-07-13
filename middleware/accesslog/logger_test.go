@@ -7,7 +7,7 @@ import (
 )
 
 type logEntry struct {
-	Level  Level
+	Level  level
 	Fields map[string]any
 }
 
@@ -16,7 +16,7 @@ type recordingLogger struct {
 	entries []logEntry
 }
 
-func (l *recordingLogger) Log(_ context.Context, level Level, _ string, fields ...any) {
+func (l *recordingLogger) Log(_ context.Context, level level, _ string, fields ...any) {
 	entry := logEntry{Level: level, Fields: make(map[string]any, len(fields)/2)}
 	for i := 0; i+1 < len(fields); i += 2 {
 		key, _ := fields[i].(string)

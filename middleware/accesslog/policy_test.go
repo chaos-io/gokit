@@ -9,27 +9,29 @@ import (
 func TestPolicyAlwaysLogsImportantAndSlowEvents(t *testing.T) {
 	t.Parallel()
 
-	p := newPolicy(Config{
+	cfg := Config{
 		SlowThreshold: time.Second,
 		SampleEvery:   0,
-		HTTP:          HTTPConfig{SkipPaths: []string{"/healthz"}},
-	})
+	}
+	p := newPolicy(cfg, []string{"/healthz"})
 
 	tests := []struct {
-		name  string
-		event Event
-		want  bool
+		name      string
+		operation string
+		duration  time.Duration
+		important bool
+		want      bool
 	}{
-		{name: "ordinary request", event: Event{Protocol: ProtocolHTTP, Operation: "/users"}},
-		{name: "successful skipped request", event: Event{Protocol: ProtocolHTTP, Operation: "/healthz"}},
-		{name: "important skipped request", event: Event{Protocol: ProtocolHTTP, Operation: "/healthz", Important: true}, want: true},
-		{name: "slow request", event: Event{Protocol: ProtocolHTTP, Operation: "/users", Duration: time.Second}, want: true},
+		{name: "ordinary request", operation: "/users"},
+		{name: "successful skipped request", operation: "/healthz"},
+		{name: "important skipped request", operation: "/healthz", important: true, want: true},
+		{name: "slow request", operation: "/users", duration: time.Second, want: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := p.ShouldLog(tt.event); got != tt.want {
-				t.Fatalf("ShouldLog() = %v, want %v", got, tt.want)
+			if got := p.shouldLog(tt.operation, "", tt.duration, tt.important); got != tt.want {
+				t.Fatalf("shouldLog() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -38,12 +40,12 @@ func TestPolicyAlwaysLogsImportantAndSlowEvents(t *testing.T) {
 func TestPolicyUsesStableRequestIDSampling(t *testing.T) {
 	t.Parallel()
 
-	p := newPolicy(Config{SampleEvery: 8})
+	p := newPolicy(Config{SampleEvery: 8}, nil)
 	foundSampled := false
 	for i := 0; i < 100; i++ {
-		event := Event{RequestID: fmt.Sprintf("request-%d", i)}
-		first := p.ShouldLog(event)
-		if second := p.ShouldLog(event); second != first {
+		requestID := fmt.Sprintf("request-%d", i)
+		first := p.shouldLog("", requestID, 0, false)
+		if second := p.shouldLog("", requestID, 0, false); second != first {
 			t.Fatalf("sampling changed for the same request ID: first=%v second=%v", first, second)
 		}
 		foundSampled = foundSampled || first
@@ -56,11 +58,11 @@ func TestPolicyUsesStableRequestIDSampling(t *testing.T) {
 func TestPolicyFallsBackToAtomicCounter(t *testing.T) {
 	t.Parallel()
 
-	p := newPolicy(Config{SampleEvery: 2})
-	if p.ShouldLog(Event{}) {
+	p := newPolicy(Config{SampleEvery: 2}, nil)
+	if p.shouldLog("", "", 0, false) {
 		t.Fatal("first event should not be sampled")
 	}
-	if !p.ShouldLog(Event{}) {
+	if !p.shouldLog("", "", 0, false) {
 		t.Fatal("second event should be sampled")
 	}
 }

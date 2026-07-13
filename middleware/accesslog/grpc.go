@@ -2,27 +2,32 @@ package accesslog
 
 import (
 	"context"
+	"net"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
-func UnaryServerInterceptor(cfg Config, options ...Option) grpc.UnaryServerInterceptor {
-	policy := newPolicy(cfg)
-	opts := buildOptions(options)
+// UnaryServerInterceptor logs completed unary gRPC server calls.
+func UnaryServerInterceptor(cfg Config) grpc.UnaryServerInterceptor {
+	return unaryServerInterceptor(cfg, defaultLog)
+}
 
+func unaryServerInterceptor(cfg Config, log logFunc) grpc.UnaryServerInterceptor {
+	policy := newPolicy(cfg, cfg.GRPC.SkipMethods)
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (response any, err error) {
 		started := time.Now()
 		defer func() {
-			duration := time.Since(started)
 			recovered := recover()
 			code := status.Code(err)
 			if recovered != nil {
 				code = codes.Internal
 			}
-			logGRPC(ctx, info, code, duration, policy, opts)
+			logGRPC(ctx, info.FullMethod, code, time.Since(started), policy, log)
 			if recovered != nil {
 				panic(recovered)
 			}
@@ -31,33 +36,44 @@ func UnaryServerInterceptor(cfg Config, options ...Option) grpc.UnaryServerInter
 	}
 }
 
-func logGRPC(ctx context.Context, info *grpc.UnaryServerInfo, code codes.Code, duration time.Duration, policy *policy, opts options) {
-	method := ""
-	if info != nil {
-		method = info.FullMethod
-	}
-	requestID := grpcRequestID(ctx)
-	if !policy.ShouldLog(Event{
-		Protocol:  ProtocolGRPC,
-		Operation: method,
-		RequestID: requestID,
-		Duration:  duration,
-		Important: importantGRPCCode(code),
-	}) {
+func logGRPC(ctx context.Context, method string, code codes.Code, duration time.Duration, policy *policy, log logFunc) {
+	requestID := requestIDFromMetadata(ctx)
+	if !policy.shouldLog(method, requestID, duration, importantGRPCCode(code)) {
 		return
 	}
-
 	fields := []any{
-		"protocol", ProtocolGRPC,
+		"protocol", "grpc",
 		"method", method,
 		"code", code.String(),
-		"duration", duration.String(),
 		"duration_ms", float64(duration.Microseconds()) / 1000,
 		"remote_ip", grpcRemoteIP(ctx),
 		"request_id", requestID,
 	}
 	fields = append(fields, traceFields(ctx)...)
-	opts.log(ctx, grpcLevel(code), "grpc access", fields...)
+	log(ctx, grpcLevel(code), "grpc access", fields...)
+}
+
+func requestIDFromMetadata(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	values := md.Get("x-request-id")
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func grpcRemoteIP(ctx context.Context) string {
+	remote, ok := peer.FromContext(ctx)
+	if !ok || remote.Addr == nil {
+		return ""
+	}
+	if address, ok := remote.Addr.(*net.TCPAddr); ok {
+		return address.IP.String()
+	}
+	return remoteHost(remote.Addr.String())
 }
 
 func importantGRPCCode(code codes.Code) bool {
@@ -76,10 +92,10 @@ func importantGRPCCode(code codes.Code) bool {
 	}
 }
 
-func grpcLevel(code codes.Code) Level {
+func grpcLevel(code codes.Code) level {
 	switch code {
 	case codes.Unknown, codes.Internal, codes.DataLoss:
-		return LevelError
+		return levelError
 	case codes.DeadlineExceeded,
 		codes.PermissionDenied,
 		codes.ResourceExhausted,
@@ -87,8 +103,8 @@ func grpcLevel(code codes.Code) Level {
 		codes.Aborted,
 		codes.Unavailable,
 		codes.Unauthenticated:
-		return LevelWarn
+		return levelWarn
 	default:
-		return LevelInfo
+		return levelInfo
 	}
 }

@@ -14,7 +14,7 @@ func TestHTTPMiddlewareLogsStructuredServerError(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	middleware := HTTPMiddleware(Config{SampleEvery: 0}, WithLogFunc(logger.Log))
+	middleware := httpMiddleware(Config{SampleEvery: 0}, logger.Log)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("down"))
@@ -27,8 +27,8 @@ func TestHTTPMiddlewareLogsStructuredServerError(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), r)
 
 	entry := logger.single(t)
-	if entry.Level != LevelError {
-		t.Fatalf("level = %v, want %v", entry.Level, LevelError)
+	if entry.Level != levelError {
+		t.Fatalf("level = %v, want %v", entry.Level, levelError)
 	}
 	assertField(t, entry.Fields, "protocol", "http")
 	assertField(t, entry.Fields, "method", http.MethodGet)
@@ -45,10 +45,10 @@ func TestHTTPMiddlewareSkipsSuccessfulConfiguredPath(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	handler := HTTPMiddleware(Config{
+	handler := httpMiddleware(Config{
 		SampleEvery: 1,
 		HTTP:        HTTPConfig{SkipPaths: []string{"/healthz"}},
-	}, WithLogFunc(logger.Log))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	}, logger.Log)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if got := logger.count(); got != 0 {
@@ -60,14 +60,14 @@ func TestHTTPMiddlewareLogsSlowSuccessfulRequest(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	handler := HTTPMiddleware(Config{
+	handler := httpMiddleware(Config{
 		SlowThreshold: time.Nanosecond,
 		SampleEvery:   0,
-	}, WithLogFunc(logger.Log))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	}, logger.Log)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/users", nil))
-	if entry := logger.single(t); entry.Level != LevelInfo {
-		t.Fatalf("level = %v, want %v", entry.Level, LevelInfo)
+	if entry := logger.single(t); entry.Level != levelInfo {
+		t.Fatalf("level = %v, want %v", entry.Level, levelInfo)
 	}
 }
 
@@ -87,7 +87,7 @@ func TestHTTPMiddlewareLogsAndPropagatesPanic(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	handler := HTTPMiddleware(Config{SampleEvery: 0}, WithLogFunc(logger.Log))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := httpMiddleware(Config{SampleEvery: 0}, logger.Log)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("boom")
 	}))
 
@@ -95,8 +95,8 @@ func TestHTTPMiddlewareLogsAndPropagatesPanic(t *testing.T) {
 		if recovered := recover(); recovered != "boom" {
 			t.Fatalf("recovered = %v, want boom", recovered)
 		}
-		if entry := logger.single(t); entry.Level != LevelError {
-			t.Fatalf("level = %v, want %v", entry.Level, LevelError)
+		if entry := logger.single(t); entry.Level != levelError {
+			t.Fatalf("level = %v, want %v", entry.Level, levelError)
 		}
 	}()
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/panic", nil))

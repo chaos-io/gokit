@@ -17,7 +17,7 @@ func TestUnaryServerInterceptorLogsStructuredServerError(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	interceptor := UnaryServerInterceptor(Config{SampleEvery: 0}, WithLogFunc(logger.Log))
+	interceptor := unaryServerInterceptor(Config{SampleEvery: 0}, logger.Log)
 	ctx := metadata.NewIncomingContext(contextWithTrace(context.Background()), metadata.Pairs("x-request-id", "req-grpc"))
 	ctx = peer.NewContext(ctx, &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("203.0.113.11"), Port: 4321}})
 	wantErr := status.Error(codes.Unavailable, "unavailable")
@@ -30,8 +30,8 @@ func TestUnaryServerInterceptorLogsStructuredServerError(t *testing.T) {
 	}
 
 	entry := logger.single(t)
-	if entry.Level != LevelWarn {
-		t.Fatalf("level = %v, want %v", entry.Level, LevelWarn)
+	if entry.Level != levelWarn {
+		t.Fatalf("level = %v, want %v", entry.Level, levelWarn)
 	}
 	assertField(t, entry.Fields, "protocol", "grpc")
 	assertField(t, entry.Fields, "method", "/user.v1.User/GetUser")
@@ -45,10 +45,10 @@ func TestUnaryServerInterceptorSkipsSuccessfulHealthMethod(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	interceptor := UnaryServerInterceptor(Config{
+	interceptor := unaryServerInterceptor(Config{
 		SampleEvery: 1,
 		GRPC:        GRPCConfig{SkipMethods: []string{"/grpc.health.v1.Health/Check"}},
-	}, WithLogFunc(logger.Log))
+	}, logger.Log)
 
 	_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/grpc.health.v1.Health/Check"}, func(context.Context, any) (any, error) {
 		return nil, nil
@@ -65,15 +65,15 @@ func TestUnaryServerInterceptorLogsSlowSuccessfulCall(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	interceptor := UnaryServerInterceptor(Config{SlowThreshold: time.Nanosecond}, WithLogFunc(logger.Log))
+	interceptor := unaryServerInterceptor(Config{SlowThreshold: time.Nanosecond}, logger.Log)
 	_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/user.v1.User/ListUsers"}, func(context.Context, any) (any, error) {
 		return nil, nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entry := logger.single(t); entry.Level != LevelInfo {
-		t.Fatalf("level = %v, want %v", entry.Level, LevelInfo)
+	if entry := logger.single(t); entry.Level != levelInfo {
+		t.Fatalf("level = %v, want %v", entry.Level, levelInfo)
 	}
 }
 
@@ -81,14 +81,14 @@ func TestUnaryServerInterceptorLogsAndPropagatesPanic(t *testing.T) {
 	t.Parallel()
 
 	logger := &recordingLogger{}
-	interceptor := UnaryServerInterceptor(Config{SampleEvery: 0}, WithLogFunc(logger.Log))
+	interceptor := unaryServerInterceptor(Config{SampleEvery: 0}, logger.Log)
 
 	defer func() {
 		if recovered := recover(); recovered != "boom" {
 			t.Fatalf("recovered = %v, want boom", recovered)
 		}
-		if entry := logger.single(t); entry.Level != LevelError {
-			t.Fatalf("level = %v, want %v", entry.Level, LevelError)
+		if entry := logger.single(t); entry.Level != levelError {
+			t.Fatalf("level = %v, want %v", entry.Level, levelError)
 		}
 	}()
 	_, _ = interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/user.v1.User/GetUser"}, func(context.Context, any) (any, error) {

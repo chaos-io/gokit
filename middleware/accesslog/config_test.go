@@ -8,7 +8,7 @@ import (
 	sourcememory "github.com/chaos-io/chaos/config/source/memory"
 )
 
-func TestNewConfigLoadsTransportAccessLog(t *testing.T) {
+func TestLoadConfigReadsTransportAccessLog(t *testing.T) {
 	err := chaosconfig.InitDefault(
 		chaosconfig.WithWatcherDisabled(),
 		chaosconfig.WithSource(sourcememory.NewSource(sourcememory.WithJSON([]byte(`{
@@ -26,7 +26,7 @@ func TestNewConfigLoadsTransportAccessLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := NewConfig()
+	cfg := LoadConfig()
 	if cfg.SlowThreshold != 750*time.Millisecond {
 		t.Fatalf("slow threshold = %v, want 750ms", cfg.SlowThreshold)
 	}

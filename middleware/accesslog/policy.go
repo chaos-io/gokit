@@ -5,89 +5,58 @@ import (
 	"time"
 )
 
-const (
-	ProtocolHTTP = "http"
-	ProtocolGRPC = "grpc"
-)
-
-type Event struct {
-	Protocol  string
-	Operation string
-	RequestID string
-	Duration  time.Duration
-	Important bool
-}
-
 type policy struct {
 	slowThreshold time.Duration
 	sampleEvery   uint64
-	httpSkip      map[string]struct{}
-	grpcSkip      map[string]struct{}
+	skip          map[string]struct{}
 	counter       atomic.Uint64
 }
 
-func newPolicy(cfg Config) *policy {
+func newPolicy(cfg Config, skip []string) *policy {
+	paths := make(map[string]struct{}, len(skip))
+	for _, path := range skip {
+		if path != "" {
+			paths[path] = struct{}{}
+		}
+	}
 	return &policy{
 		slowThreshold: cfg.SlowThreshold,
 		sampleEvery:   cfg.SampleEvery,
-		httpSkip:      toSet(cfg.HTTP.SkipPaths),
-		grpcSkip:      toSet(cfg.GRPC.SkipMethods),
+		skip:          paths,
 	}
 }
 
-func (p *policy) ShouldLog(event Event) bool {
-	if event.Important {
+func (p *policy) shouldLog(operation, requestID string, duration time.Duration, important bool) bool {
+	if important {
 		return true
 	}
-	if p.skipped(event.Protocol, event.Operation) {
+	if _, skipped := p.skip[operation]; skipped {
 		return false
 	}
-	if p.slowThreshold > 0 && event.Duration >= p.slowThreshold {
+	if p.slowThreshold > 0 && duration >= p.slowThreshold {
 		return true
 	}
-	if p.sampleEvery == 0 {
+	switch p.sampleEvery {
+	case 0:
 		return false
-	}
-	if p.sampleEvery == 1 {
+	case 1:
 		return true
 	}
-	if event.RequestID != "" {
-		return hash(event.RequestID)%p.sampleEvery == 0
+	if requestID != "" {
+		return fnv64a(requestID)%p.sampleEvery == 0
 	}
 	return p.counter.Add(1)%p.sampleEvery == 0
 }
 
-func (p *policy) skipped(protocol, operation string) bool {
-	var paths map[string]struct{}
-	switch protocol {
-	case ProtocolHTTP:
-		paths = p.httpSkip
-	case ProtocolGRPC:
-		paths = p.grpcSkip
-	}
-	_, ok := paths[operation]
-	return ok
-}
-
-func toSet(values []string) map[string]struct{} {
-	set := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		if value != "" {
-			set[value] = struct{}{}
-		}
-	}
-	return set
-}
-
-func hash(value string) uint64 {
+func fnv64a(value string) uint64 {
 	const (
 		offset = 14695981039346656037
 		prime  = 1099511628211
 	)
-	h := uint64(offset)
+	hash := uint64(offset)
 	for i := 0; i < len(value); i++ {
-		h ^= uint64(value[i])
-		h *= prime
+		hash ^= uint64(value[i])
+		hash *= prime
 	}
-	return h
+	return hash
 }
