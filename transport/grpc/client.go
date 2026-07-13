@@ -24,6 +24,7 @@ type clientOptions struct {
 	unary         []stdgrpc.UnaryClientInterceptor
 	stream        []stdgrpc.StreamClientInterceptor
 	serviceConfig string
+	dialOptions   []stdgrpc.DialOption
 }
 
 // ClientOption configures a client connection.
@@ -42,6 +43,8 @@ func WithInsecure() ClientOption {
 }
 
 // WithInstancer uses a Go-kit Instancer as the connection's name resolver.
+// The caller owns the Instancer. Closing the connection deregisters the
+// resolver listener but does not call Instancer.Stop.
 func WithInstancer(instancer kitsd.Instancer) ClientOption {
 	return func(options *clientOptions) {
 		options.instancer = instancer
@@ -62,10 +65,20 @@ func WithStreamInterceptors(interceptors ...stdgrpc.StreamClientInterceptor) Cli
 	}
 }
 
-// WithDefaultServiceConfig configures gRPC load balancing and per-method call policies.
+// WithDefaultServiceConfig replaces the complete default service config.
+// When discovery is enabled, include loadBalancingConfig in custom configs to
+// preserve round_robin behavior.
 func WithDefaultServiceConfig(serviceConfig string) ClientOption {
 	return func(options *clientOptions) {
 		options.serviceConfig = strings.TrimSpace(serviceConfig)
+	}
+}
+
+// WithDialOptions appends advanced native gRPC options. Use the dedicated
+// options above for transport credentials, discovery, and interceptors.
+func WithDialOptions(options ...stdgrpc.DialOption) ClientOption {
+	return func(config *clientOptions) {
+		config.dialOptions = append(config.dialOptions, options...)
 	}
 }
 
@@ -104,6 +117,7 @@ func NewClient(target string, options ...ClientOption) (*stdgrpc.ClientConn, err
 	if config.serviceConfig != "" {
 		dialOptions = append(dialOptions, stdgrpc.WithDefaultServiceConfig(config.serviceConfig))
 	}
+	dialOptions = append(dialOptions, config.dialOptions...)
 
 	return stdgrpc.NewClient(target, dialOptions...)
 }
