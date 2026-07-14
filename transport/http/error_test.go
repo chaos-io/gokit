@@ -2,8 +2,11 @@ package http
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 
+	"github.com/chaos-io/core/go/chaos/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -11,6 +14,7 @@ import (
 type testCodedError struct {
 	code    int32
 	message string
+	cause   error
 }
 
 func (e testCodedError) Error() string {
@@ -29,6 +33,14 @@ func (e testCodedError) Extra() map[string]string {
 	return nil
 }
 
+func (e testCodedError) Unwrap() error {
+	return e.cause
+}
+
+func (e testCodedError) StatusCode() int {
+	return http.StatusNotFound
+}
+
 func TestCoreErrorFromErrorPreservesErrorXCodeAndMessage(t *testing.T) {
 	got := CoreErrorFromError(testCodedError{
 		code:    600121001,
@@ -39,6 +51,23 @@ func TestCoreErrorFromErrorPreservesErrorXCodeAndMessage(t *testing.T) {
 	require.NotNil(t, got.Code)
 	assert.Equal(t, int32(600121001), got.Code.Code)
 	assert.Equal(t, "task not found", got.Message)
+}
+
+func TestCoreErrorFromErrorPrefersBusinessCode(t *testing.T) {
+	got := CoreErrorFromError(testCodedError{
+		code:    600121001,
+		message: "task not found",
+		cause:   core.NewErrorFrom(http.StatusNotFound, "not found"),
+	})
+
+	assert.Equal(t, int32(600121001), got.Code.Code)
+	assert.Equal(t, "task not found", got.Message)
+}
+
+func TestStatusCodeFromErrorFindsWrappedStatusCoder(t *testing.T) {
+	err := fmt.Errorf("endpoint failed: %w", testCodedError{})
+	assert.Equal(t, http.StatusNotFound, StatusCodeFromError(err))
+	assert.Equal(t, http.StatusInternalServerError, StatusCodeFromError(errors.New("unknown")))
 }
 
 func TestWrapErrorAddsAllHeaderPairs(t *testing.T) {

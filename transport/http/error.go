@@ -15,6 +15,10 @@ type codedError interface {
 	Extra() map[string]string
 }
 
+type statusCoder interface {
+	StatusCode() int
+}
+
 // Error satisfies the Headerer and StatusCoder interfaces in
 // package github.com/go-kit/kit/transport/http.
 type Error struct {
@@ -44,17 +48,27 @@ func CoreErrorFromError(err error) *core.Error {
 		return nil
 	}
 
-	var coreErr *core.Error
-	if errors.As(err, &coreErr) {
-		return coreErr
-	}
-
 	var coded codedError
 	if errors.As(err, &coded) {
 		return core.NewErrorFrom(coded.Code(), coded.Message())
 	}
 
-	return core.NewErrorFrom(http.StatusInternalServerError, err.Error())
+	var coreErr *core.Error
+	if errors.As(err, &coreErr) {
+		return coreErr
+	}
+
+	return core.NewErrorFrom(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+}
+
+func StatusCodeFromError(err error) int {
+	var coder statusCoder
+	if errors.As(err, &coder) {
+		if status := coder.StatusCode(); status >= http.StatusContinue && status <= 599 {
+			return status
+		}
+	}
+	return http.StatusInternalServerError
 }
 
 func (e Error) StatusCode() int {
