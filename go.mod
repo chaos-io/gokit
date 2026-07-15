@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/cenk/backoff v2.2.1+incompatible
-	github.com/chaos-io/chaos v0.0.0-20260714004638-cdf9697962a6
+	github.com/chaos-io/chaos v0.0.0-20260715024959-c79dc97ac608
 	github.com/chaos-io/core/go v0.0.0-20260714004535-9b931833a352
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-kit/kit v0.13.0
@@ -29,7 +29,6 @@ require (
 	github.com/bitly/go-simplejson v0.5.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/chaos-io/core v0.0.0-20260714004535-9b931833a352 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

@@ -25,10 +25,8 @@ github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/chaos-io/chaos v0.0.0-20260714004638-cdf9697962a6 h1:O4U0C9CR55BnIMOJ3VpFnhmmCatiroUs5doZCQFqdh0=
-github.com/chaos-io/chaos v0.0.0-20260714004638-cdf9697962a6/go.mod h1:1LAH8I1GWFOIdLUNOPKXzRnq6DzGp9VWBkX4z+jkdoI=
-github.com/chaos-io/core v0.0.0-20260714004535-9b931833a352 h1:0KpG+T2gaYCjjVXtzbgTlWWfQ4HJXG4Wm5fc04zCqCM=
-github.com/chaos-io/core v0.0.0-20260714004535-9b931833a352/go.mod h1:0/z5RUcDrrqAJS7hwahQd4AKmraU1b9z0s2KF8ldoeQ=
+github.com/chaos-io/chaos v0.0.0-20260715024959-c79dc97ac608 h1:Q7MCB9uUxAqcxSOEwC1zfEeuMR1DJ9sjxudJ7ejRkP0=
+github.com/chaos-io/chaos v0.0.0-20260715024959-c79dc97ac608/go.mod h1:1LAH8I1GWFOIdLUNOPKXzRnq6DzGp9VWBkX4z+jkdoI=
 github.com/chaos-io/core/go v0.0.0-20260714004535-9b931833a352 h1:k+a41lF67FNYRBqUn9D3v8lurbjGEptOtkD6RrtPLbQ=
 github.com/chaos-io/core/go v0.0.0-20260714004535-9b931833a352/go.mod h1:+Nx1HbTGj3AXHEuFv/MlZZ8xIFmQydEi5IWuqAUgKaU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
