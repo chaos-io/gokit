@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/cenk/backoff v2.2.1+incompatible
-	github.com/chaos-io/chaos v0.0.0-20260715024959-c79dc97ac608
+	github.com/chaos-io/chaos v0.0.0-20260717135327-37409686b5ea
 	github.com/chaos-io/core/go v0.0.0-20260714004535-9b931833a352
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-kit/kit v0.13.0
