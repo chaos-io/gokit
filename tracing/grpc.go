@@ -3,7 +3,10 @@ package tracing
 import (
 	"context"
 
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -15,6 +18,38 @@ var grpcPropagator = propagation.NewCompositeTextMapPropagator(
 // GRPCToContext extracts OpenTelemetry propagation metadata from md.
 func GRPCToContext(ctx context.Context, md metadata.MD) context.Context {
 	return grpcPropagator.Extract(ctx, metadataTextMap(md))
+}
+
+// GRPCUnaryClientInterceptor creates a client span and propagates its context
+// to unary gRPC calls.
+func GRPCUnaryClientInterceptor(tracer trace.Tracer) grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply any,
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		if tracer == nil {
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}
+
+		ctx, span := tracer.Start(ctx, method, trace.WithSpanKind(trace.SpanKindClient))
+		defer span.End()
+
+		md, _ := metadata.FromOutgoingContext(ctx)
+		md = md.Copy()
+		grpcPropagator.Inject(ctx, metadataTextMap(md))
+		ctx = metadata.NewOutgoingContext(ctx, md)
+
+		if err := invoker(ctx, method, req, reply, cc, opts...); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return err
+		}
+		return nil
+	}
 }
 
 // metadataTextMap implements the TextMapCarrier interface for gRPC metadata.
