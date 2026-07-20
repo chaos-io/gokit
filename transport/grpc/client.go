@@ -7,7 +7,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/chaos-io/gokit/metrics"
+	"github.com/chaos-io/gokit/tracing"
 	kitsd "github.com/go-kit/kit/sd"
+	"go.opentelemetry.io/otel/trace"
 	stdgrpc "google.golang.org/grpc"
 	_ "google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/credentials"
@@ -56,6 +59,15 @@ func WithUnaryInterceptors(interceptors ...stdgrpc.UnaryClientInterceptor) Clien
 	return func(options *clientOptions) {
 		options.unary = append(options.unary, interceptors...)
 	}
+}
+
+// WithClientObservability adds tracing and metrics to unary client calls.
+// caller identifies the calling service and target identifies the remote service.
+func WithClientObservability(caller, target string, tracer trace.Tracer, instrumentation *metrics.Instrumentation) ClientOption {
+	return WithUnaryInterceptors(
+		tracing.GRPCUnaryClientInterceptor(tracer),
+		instrumentation.GRPCUnaryClientInterceptor(caller, target),
+	)
 }
 
 // WithStreamInterceptors appends stream client interceptors in invocation order.
